@@ -25,6 +25,12 @@ const tabs = [
 
 type Tab = (typeof tabs)[number];
 
+function clampInt(value: string, min: number, max: number) {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return min;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [config, setConfig] = useState<ProjectConfig>(() => {
@@ -352,21 +358,40 @@ export default function Home() {
                         <div className="mt-1 grid gap-2 md:grid-cols-2">
                           <label className="text-xs text-slate-300">
                             Signature
+                            {(() => {
+                              const signatures = config.selectedFunctions.map((fn) => fn.signature);
+                              const hasCurrent = signatures.includes(step.signature);
+                              const selectValue = hasCurrent
+                                ? step.signature
+                                : signatures.length === 0
+                                  ? "__none"
+                                  : "__missing";
+                              return (
                             <select
                               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2"
-                              value={step.signature}
+                              value={selectValue}
                               onChange={(event) =>
+                                event.target.value !== "__none" &&
+                                event.target.value !== "__missing" &&
                                 updateWorkflowStep(workflow.name, step.id, {
                                   signature: event.target.value,
                                 })
                               }
                             >
+                              {signatures.length === 0 && (
+                                <option value="__none">No selected functions available</option>
+                              )}
+                              {!hasCurrent && signatures.length > 0 && (
+                                <option value="__missing">Missing: {step.signature}</option>
+                              )}
                               {config.selectedFunctions.map((fn) => (
                                 <option key={fn.signature} value={fn.signature}>
                                   {fn.signature}
                                 </option>
                               ))}
                             </select>
+                              );
+                            })()}
                           </label>
                           <label className="text-xs text-slate-300">
                             Condition
@@ -391,18 +416,20 @@ export default function Home() {
                             value={`${step.retryAttempts}`}
                             onChange={(value) =>
                               updateWorkflowStep(workflow.name, step.id, {
-                                retryAttempts: Number(value || "0"),
+                                retryAttempts: clampInt(value, 0, 10),
                               })
                             }
+                            type="number"
                           />
                           <LabeledInput
                             label="Backoff (ms)"
                             value={`${step.backoffMs}`}
                             onChange={(value) =>
                               updateWorkflowStep(workflow.name, step.id, {
-                                backoffMs: Number(value || "0"),
+                                backoffMs: clampInt(value, 0, 60000),
                               })
                             }
+                            type="number"
                           />
                           <label className="text-xs text-slate-300">
                             Fallback
@@ -556,15 +583,18 @@ function LabeledInput({
   label,
   value,
   onChange,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  type?: "text" | "number";
 }) {
   return (
     <label className="text-xs text-slate-300">
       {label}
       <input
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm"

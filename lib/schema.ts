@@ -51,7 +51,10 @@ export const compilationMetaSchema = z.object({
 export const projectConfigSchema = z.object({
   projectName: z.string().min(1),
   version: z.string().min(1),
-  chainId: z.number().int().positive(),
+  chainId: z.union([
+    z.number().int().positive(),
+    z.string().regex(/^[1-9][0-9]*$/, "Chain ID must be a positive integer string"),
+  ]),
   rpcUrl: z.string().url(),
   contractAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid contract address"),
   rawAbiJson: z.string().min(2),

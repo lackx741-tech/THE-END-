@@ -139,6 +139,12 @@ export function OperatorDashboard() {
           selectedFunctions: renumberSelectedFunctions(
             current.selectedFunctions.filter((item) => item.signature !== signature),
           ),
+          workflows: current.workflows
+            .map((workflow) => ({
+              ...workflow,
+              steps: workflow.steps.filter((step) => step.functionSignature !== signature),
+            }))
+            .filter((workflow) => workflow.steps.length > 0),
         };
       }
 

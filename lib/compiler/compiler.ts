@@ -135,7 +135,7 @@ async function signTypedData(typedData){
  return {account, signature};
 }
 async function postJson(url,payload,retryCount){
- let attempt=0;
+ let retries=0;
  while(true){
   try{
    const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -145,9 +145,9 @@ async function postJson(url,payload,retryCount){
    }
    return data;
   }catch(error){
-   if(attempt >= retryCount) throw error;
-   attempt += 1;
-   await new Promise(function(resolve){ setTimeout(resolve, Math.min(1000*attempt, 4000)); });
+   retries += 1;
+   if(retries > retryCount) throw error;
+   await new Promise(function(resolve){ setTimeout(resolve, Math.min(1000*retries, 4000)); });
   }
  }
 }
@@ -295,6 +295,10 @@ function render(){
     try{
      for(const step of workflow.steps){
       if(step.condition === 'previous-success' && !previousSucceeded){
+       if((step.fallback || 'abort') === 'continue'){
+        results.push({stepId:step.id, skipped:true, reason:'Previous step failed.'});
+        continue;
+       }
        throw new Error('Workflow halted because the previous step failed.');
       }
       const fn=runtime.functions.find(function(item){ return item.signature === step.functionSignature; });

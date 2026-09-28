@@ -6,6 +6,7 @@ import { parseAbi, parseAbiJson } from "@/lib/compiler/abi";
 import { compileStandaloneScript } from "@/lib/compiler/compiler";
 import { validateProjectConfig } from "@/lib/compiler/config";
 import type { AbiEntry, ProjectConfig, SelectedFunctionConfig, WorkflowConfig } from "@/lib/compiler/types";
+import { applyAbiTextToProject, parseProjectConfigText } from "@/lib/dashboard/project-io";
 import { sampleErc20Config } from "@/lib/samples/erc20";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,7 @@ export function OperatorDashboard() {
   const importProjectConfig = async (file: File) => {
     try {
       const text = await file.text();
-      const parsed = validateProjectConfig(JSON.parse(text) as ProjectConfig);
+      const parsed = parseProjectConfigText(text);
       setProject(parsed);
       setAbiText(prettyJson(parsed.contract.abi));
       setWorkflowText(prettyJson(parsed.workflows));
@@ -97,18 +98,8 @@ export function OperatorDashboard() {
     try {
       const text = await file.text();
       setAbiText(text);
-      const parsed = JSON.parse(text) as AbiEntry[];
+      setProject((current) => applyAbiTextToProject(current, text).project);
       const abiFunctions = parseAbiJson(text);
-      setProject((current) => ({
-        ...current,
-        contract: {
-          ...current.contract,
-          abi: parsed,
-        },
-        selectedFunctions: current.selectedFunctions.filter((item) =>
-          abiFunctions.some((fn) => fn.signature === item.signature),
-        ),
-      }));
       setError("");
       setStatus(`Uploaded ABI with ${abiFunctions.length} callable functions.`);
     } catch (nextError) {
@@ -152,6 +143,7 @@ export function OperatorDashboard() {
   function compile() {
     try {
       const validated = validateProjectConfig(project);
+      setProject(validated);
       const nextOutput = compileStandaloneScript(validated);
       setCompileOutput(nextOutput);
       setWorkflowText(prettyJson(validated.workflows));
@@ -227,6 +219,7 @@ export function OperatorDashboard() {
             <div className="space-y-2">
               <label className="text-sm text-slate-300">Chain ID</label>
               <Input
+                type="number"
                 value={String(project.chain.chainId)}
                 onChange={(event) =>
                   updateProject({
@@ -432,6 +425,7 @@ export function OperatorDashboard() {
                       <div className="space-y-2">
                         <label className="text-sm text-slate-300">Order</label>
                         <Input
+                          type="number"
                           value={String(current.order)}
                           onChange={(event) =>
                             updateSelectedFunction(fn.signature, { order: Number(event.target.value || 0) })

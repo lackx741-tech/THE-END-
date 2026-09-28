@@ -21,4 +21,15 @@ describe("validateProjectConfig", () => {
       }),
     ).toThrow("Selected function not found in ABI");
   });
+
+  it("rejects workflows that reference unselected functions", () => {
+    expect(() =>
+      validateProjectConfig({
+        ...sampleErc20Config,
+        selectedFunctions: sampleErc20Config.selectedFunctions.filter(
+          (item) => item.signature !== "approve(address,uint256)",
+        ),
+      }),
+    ).toThrow("Workflow step references a function that is not selected");
+  });
 });

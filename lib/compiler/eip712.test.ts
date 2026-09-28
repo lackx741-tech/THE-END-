@@ -21,9 +21,11 @@ describe("buildTypedDataTemplate", () => {
     const batchFunction = parsed.find((item) => item.signature === "airdrop(address[],uint256[])");
     const tupleTemplate = buildTypedDataTemplate(tupleFunction!);
     const batchTemplate = buildTypedDataTemplate(batchFunction!);
-    const nestedTypeName = tupleTemplate.types[tupleTemplate.primaryType][2]?.type;
+    const nestedTypeName = tupleTemplate.types[tupleTemplate.primaryType].find(
+      (field) => field.name === "bundle",
+    )?.type;
 
-    expect(tupleTemplate.types[nestedTypeName.replace(/\[\]$/, "")]).toEqual([
+    expect(tupleTemplate.types[nestedTypeName!.replace(/\[\]$/, "")]).toEqual([
       { name: "recipient", type: "address" },
       { name: "amount", type: "uint256" },
     ]);

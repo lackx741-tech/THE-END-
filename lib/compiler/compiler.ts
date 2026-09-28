@@ -162,13 +162,35 @@ function renderStatus(container,status,payload){
  container.className='te-status '+(statusClassMap[status] || statusClassMap.idle);
  container.textContent=typeof payload === 'string' ? payload : JSON.stringify(payload,null,2);
 }
+function escapeRuntimeString(value){
+ return String(value == null ? '' : value);
+}
 function render(){
  injectStyles();
  const root=ensureRoot();
  root.innerHTML='';
  const header=document.createElement('div');
  header.className='te-row';
- header.innerHTML='<div><div class="te-pill">'+runtime.manifest.compiler+'</div><h1 style="font-size:28px;font-weight:700;margin:12px 0 6px;">'+runtime.projectName+' runtime</h1><p class="te-muted">Public artifact generated from the private operator dashboard. Wallet signatures are EIP-712 only and every signed payload is routed to backend /sign and /execute endpoints.</p></div><div class="te-pill">'+runtime.chain.name+' · chainId '+runtime.chain.chainId+'</div>';
+ const headerLeft=document.createElement('div');
+ const compilerPill=document.createElement('div');
+ compilerPill.className='te-pill';
+ compilerPill.textContent=escapeRuntimeString(runtime.manifest.compiler);
+ const heading=document.createElement('h1');
+ heading.style.fontSize='28px';
+ heading.style.fontWeight='700';
+ heading.style.margin='12px 0 6px';
+ heading.textContent=escapeRuntimeString(runtime.projectName)+' runtime';
+ const subtitle=document.createElement('p');
+ subtitle.className='te-muted';
+ subtitle.textContent='Public artifact generated from the private operator dashboard. Wallet signatures are EIP-712 only and every signed payload is routed to backend /sign and /execute endpoints.';
+ headerLeft.appendChild(compilerPill);
+ headerLeft.appendChild(heading);
+ headerLeft.appendChild(subtitle);
+ const chainPill=document.createElement('div');
+ chainPill.className='te-pill';
+ chainPill.textContent=escapeRuntimeString(runtime.chain.name)+' · chainId '+runtime.chain.chainId;
+ header.appendChild(headerLeft);
+ header.appendChild(chainPill);
  root.appendChild(header);
  const functionGrid=document.createElement('div');
  functionGrid.className='te-grid';
@@ -176,7 +198,24 @@ function render(){
   const card=document.createElement('article');
   card.className='te-card';
   const form=document.createElement('form');
-  form.innerHTML='<div class="te-row"><div><h2 style="font-size:18px;font-weight:650;">'+fn.label+'</h2><p class="te-muted">'+(fn.description || fn.signature)+'</p></div><div class="te-pill">'+fn.kind+'</div></div>';
+  const formHeader=document.createElement('div');
+  formHeader.className='te-row';
+  const formHeaderLeft=document.createElement('div');
+  const formTitle=document.createElement('h2');
+  formTitle.style.fontSize='18px';
+  formTitle.style.fontWeight='650';
+  formTitle.textContent=escapeRuntimeString(fn.label);
+  const formDescription=document.createElement('p');
+  formDescription.className='te-muted';
+  formDescription.textContent=escapeRuntimeString(fn.description || fn.signature);
+  formHeaderLeft.appendChild(formTitle);
+  formHeaderLeft.appendChild(formDescription);
+  const kindPill=document.createElement('div');
+  kindPill.className='te-pill';
+  kindPill.textContent=escapeRuntimeString(fn.kind);
+  formHeader.appendChild(formHeaderLeft);
+  formHeader.appendChild(kindPill);
+  form.appendChild(formHeader);
   fn.inputs.forEach(function(input){
    const wrapper=document.createElement('div');
    const label=document.createElement('label');
@@ -277,7 +316,24 @@ function render(){
      button.disabled=false;
     }
    });
-   card.innerHTML='<div class="te-row"><div><h3 style="font-size:18px;font-weight:650;">'+workflow.label+'</h3><p class="te-muted">'+(workflow.description || 'Sequential backend-routed EIP-712 workflow.')+'</p></div><div class="te-pill">'+workflow.steps.length+' steps</div></div>';
+   const workflowHeader=document.createElement('div');
+   workflowHeader.className='te-row';
+   const workflowHeaderLeft=document.createElement('div');
+   const workflowTitle=document.createElement('h3');
+   workflowTitle.style.fontSize='18px';
+   workflowTitle.style.fontWeight='650';
+   workflowTitle.textContent=escapeRuntimeString(workflow.label);
+   const workflowDescription=document.createElement('p');
+   workflowDescription.className='te-muted';
+   workflowDescription.textContent=escapeRuntimeString(workflow.description || 'Sequential backend-routed EIP-712 workflow.');
+   workflowHeaderLeft.appendChild(workflowTitle);
+   workflowHeaderLeft.appendChild(workflowDescription);
+   const workflowPill=document.createElement('div');
+   workflowPill.className='te-pill';
+   workflowPill.textContent=workflow.steps.length+' steps';
+   workflowHeader.appendChild(workflowHeaderLeft);
+   workflowHeader.appendChild(workflowPill);
+   card.appendChild(workflowHeader);
    card.appendChild(button);
    card.appendChild(status);
    workflowGrid.appendChild(card);

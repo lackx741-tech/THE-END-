@@ -78,6 +78,7 @@ export function validateProjectConfig(config: ProjectConfig) {
   const parsedConfig = configSchema.parse(config);
   const parsedAbi = parseAbi(parsedConfig.contract.abi);
   const signatures = new Set(parsedAbi.map((item) => item.signature));
+  const selectedSignatures = new Set(parsedConfig.selectedFunctions.map((item) => item.signature));
 
   for (const selected of parsedConfig.selectedFunctions) {
     if (!signatures.has(selected.signature)) {
@@ -97,6 +98,9 @@ export function validateProjectConfig(config: ProjectConfig) {
     for (const step of workflow.steps) {
       if (!signatures.has(step.functionSignature)) {
         throw new Error(`Workflow step references unknown function: ${step.functionSignature}`);
+      }
+      if (!selectedSignatures.has(step.functionSignature)) {
+        throw new Error(`Workflow step references a function that is not selected: ${step.functionSignature}`);
       }
     }
   }

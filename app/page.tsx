@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { parseAndNormalizeAbi } from "@/lib/abi";
 import { compileProjectDetailed } from "@/lib/compiler";
 import { sampleProject } from "@/lib/sample";
-import type { ProjectConfig } from "@/lib/schema";
+import { projectConfigSchema, type ProjectConfig } from "@/lib/schema";
 
 const STORAGE_KEY = "the-end-control-plane-v1";
 
@@ -32,7 +32,8 @@ export default function Home() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return sampleProject;
     try {
-      return JSON.parse(saved);
+      const parsed = projectConfigSchema.safeParse(JSON.parse(saved));
+      return parsed.success ? parsed.data : sampleProject;
     } catch {
       return sampleProject;
     }
@@ -63,6 +64,7 @@ export default function Home() {
   };
 
   const toggleFunction = (signature: string) => {
+    if (abi.errors.length > 0) return;
     if (selectedSignatures.has(signature)) {
       setConfig((prev) => ({
         ...prev,
@@ -272,7 +274,8 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => toggleFunction(fn.signature)}
-                          className="mt-2 rounded-lg border border-slate-700 px-3 py-1 text-xs"
+                          disabled={abi.errors.length > 0}
+                          className="mt-2 rounded-lg border border-slate-700 px-3 py-1 text-xs disabled:opacity-40"
                         >
                           {selected ? "Deselect" : "Select"}
                         </button>

@@ -87,25 +87,24 @@ function hexToBigInt(word){return BigInt("0x"+word);}
 function readWord(data,offsetBytes){const start=offsetBytes*2;return data.slice(start,start+64);} 
 function decodeType(param,data,offsetBytes){const arr=parseArray(param.type);if(arr){if(arr.len===null){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));const len=Number(hexToBigInt(readWord(data,loc)));const inner={...param,type:arr.inner};const values=[];const base=loc+32;const step=isDynamic(inner)?32:staticSize(inner);for(let i=0;i<len;i++){values.push(decodeType(inner,data,base+i*step));}return values;}const inner={...param,type:arr.inner};if(isDynamic(inner)){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));const values=[];for(let i=0;i<arr.len;i++){values.push(decodeType(inner,data,loc+i*32));}return values;}const values=[];for(let i=0;i<arr.len;i++){values.push(decodeType(inner,data,offsetBytes+i*staticSize(inner)));}return values;}
 if(param.type.startsWith("tuple")){const comps=param.components||[];if(comps.some(c=>isDynamic(c))){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));return decodeTuple(comps,data,loc);}return decodeTuple(comps,data,offsetBytes);}const word=readWord(data,offsetBytes);if(param.type==="address") return "0x"+word.slice(24);
-if(param.type==="bool") return word.endsWith("1");
+if(param.type==="bool") return hexToBigInt(word)!==0n;
 if(/^u?int(\\d+)?$/.test(param.type)) return hexToBigInt(word).toString();
 if(param.type==="bytes"){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));const len=Number(hexToBigInt(readWord(data,loc)));const start=(loc+32)*2;return "0x"+data.slice(start,start+len*2);} 
 if(param.type==="string"){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));const len=Number(hexToBigInt(readWord(data,loc)));const start=(loc+32)*2;const hex=data.slice(start,start+len*2);const arrBytes=new Uint8Array(hex.match(/.{1,2}/g)?.map(b=>parseInt(b,16))||[]);return new TextDecoder().decode(arrBytes);} 
 if(/^bytes([1-9]|[12]\\d|3[0-2])$/.test(param.type)){const size=Number(param.type.replace("bytes",""));return "0x"+word.slice(0,size*2);}return "0x"+word;}
 function decodeTuple(components,data,base){const out=[];let cursor=base;for(const c of components){out.push(decodeType(c,data,cursor));cursor+=isDynamic(c)?32:staticSize(c);}return out;}
-async function selector(provider,signature){const hash=await provider.request({method:"web3_sha3",params:[signature]});return String(hash).slice(0,10);}
 async function getProvider(){const provider=window.ethereum;if(!provider) throw new Error("EIP-1193 provider not found");return provider;}
 async function ensureChain(provider,chainId){const current=await provider.request({method:"eth_chainId"});const target="0x"+Number(chainId).toString(16);if(String(current).toLowerCase()===target.toLowerCase()) return;try{await provider.request({method:"wallet_switchEthereumChain",params:[{chainId:target}]});}catch(error){throw new Error("Wrong-chain or switch failed: "+(error&&error.message?error.message:String(error)));}}
 function mountRoot(selectorValue){const root=document.querySelector(selectorValue)||document.body;return root;}
 function inputForParam(param,defaultValue){const wrap=document.createElement("div");wrap.className="tx-field";const label=document.createElement("label");label.textContent=param.label||param.name||param.type;const input=document.createElement("input");input.value=defaultValue||"";input.placeholder=param.type;input.dataset.paramType=param.type;input.className="tx-input";wrap.appendChild(label);wrap.appendChild(input);return {wrap,input};}
 function injectStyles(){if(document.getElementById("tx-client-style")) return;const style=document.createElement("style");style.id="tx-client-style";style.textContent='.tx-shell{font-family:Inter,system-ui,sans-serif;background:#070b14;color:#e6ecff;padding:16px;border-radius:16px;border:1px solid #1f2b44}.tx-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.tx-card{background:#0d1423;border:1px solid #203050;padding:12px;margin-top:12px;border-radius:12px}.tx-field{display:flex;flex-direction:column;gap:4px;margin:8px 0}.tx-input, .tx-button, .tx-select{background:#0a1020;color:#f4f7ff;border:1px solid #2a3b63;padding:8px;border-radius:8px}.tx-button{cursor:pointer}.tx-status{white-space:pre-wrap;background:#04070f;border:1px solid #19253f;padding:10px;border-radius:8px;margin-top:10px;}';document.head.appendChild(style);}
-function parseValueForType(type,input){const arr=parseArray(type);if(arr){try{return JSON.parse(input);}catch{return [];}}if(/^u?int(\\d+)?$/.test(type)) return input||"0";if(type==="bool") return input==="true"||input==="1";if(type==="address") return input; if(type==="bytes"||/^bytes([1-9]|[12]\\d|3[0-2])$/.test(type)) return input||"0x";if(type==="tuple") {try{return JSON.parse(input);}catch{return [];}} return input;}
+function parseValueForType(type,input){const arr=parseArray(type);if(arr){try{return JSON.parse(input);}catch{return [];}}if(/^u?int(\\d+)?$/.test(type)) return input||"0";if(type==="bool") return input==="true"||input==="1";if(type==="address") return input; if(type==="bytes"||/^bytes([1-9]|[12]\\d|3[0-2])$/.test(type)) return input||"0x";if(type.startsWith("(")||type==="tuple"){try{return JSON.parse(input);}catch{return [];}} return input;}
 
 function buildClient(payload){const state={provider:null,account:null,lastStepSucceeded:null,stepResults:[]};
 const api={
   async connect(){state.provider=await getProvider();await ensureChain(state.provider,payload.config.chainId);const accounts=await state.provider.request({method:"eth_requestAccounts"});state.account=accounts[0]||null;return state.account;},
-  async executeRead(fn,args){if(!state.provider) await api.connect();const sig=fn.signature;const method=await selector(state.provider,sig);const encoded=encodeParams(fn.inputs,args).replace(/^0x/,"");const data=method+encoded;const raw=await state.provider.request({method:"eth_call",params:[{to:payload.config.contractAddress,data},"latest"]});const clean=String(raw).replace(/^0x/,"");const decoded=fn.outputs.length?fn.outputs.map((out,idx)=>decodeType(out,clean,idx*32)):[];return {raw,decoded};},
-  async executeWrite(fn,args,extra){if(!state.provider) await api.connect();const sig=fn.signature;const method=await selector(state.provider,sig);const encoded=encodeParams(fn.inputs,args).replace(/^0x/,"");const tx={from:state.account,to:payload.config.contractAddress,data:method+encoded};if(extra&&extra.value) tx.value=extra.value;if(extra&&extra.gas) tx.gas=extra.gas;if(extra&&extra.maxFeePerGas) tx.maxFeePerGas=extra.maxFeePerGas;if(extra&&extra.maxPriorityFeePerGas) tx.maxPriorityFeePerGas=extra.maxPriorityFeePerGas;const hash=await state.provider.request({method:"eth_sendTransaction",params:[tx]});let receipt=null;for(let i=0;i<120;i++){receipt=await state.provider.request({method:"eth_getTransactionReceipt",params:[hash]});if(receipt) break; await new Promise(r=>setTimeout(r,2000));}return {hash,receipt};},
+  async executeRead(fn,args){if(!state.provider) await api.connect();const method=fn.selector;const encoded=encodeParams(fn.inputs,args).replace(/^0x/,"");const data=method+encoded;const raw=await state.provider.request({method:"eth_call",params:[{to:payload.config.contractAddress,data},"latest"]});const clean=String(raw).replace(/^0x/,"");const decoded=fn.outputs.length?fn.outputs.map((out,idx)=>decodeType(out,clean,idx*32)):[];return {raw,decoded};},
+  async executeWrite(fn,args,extra){if(!state.provider) await api.connect();const method=fn.selector;const encoded=encodeParams(fn.inputs,args).replace(/^0x/,"");const tx={from:state.account,to:payload.config.contractAddress,data:method+encoded};if(extra&&extra.value) tx.value=extra.value;if(extra&&extra.gas) tx.gas=extra.gas;if(extra&&extra.maxFeePerGas) tx.maxFeePerGas=extra.maxFeePerGas;if(extra&&extra.maxPriorityFeePerGas) tx.maxPriorityFeePerGas=extra.maxPriorityFeePerGas;const hash=await state.provider.request({method:"eth_sendTransaction",params:[tx]});let receipt=null;for(let i=0;i<120;i++){receipt=await state.provider.request({method:"eth_getTransactionReceipt",params:[hash]});if(receipt) break; await new Promise(r=>setTimeout(r,2000));}return {hash,receipt};},
   async executeWorkflow(name,argMap){const wf=payload.config.workflows.find(w=>w.name===name);if(!wf) throw new Error("Workflow not found");const results=[];let prevOk=null;for(const step of wf.steps){if(step.condition==="previousStepSucceeded"&&prevOk!==true) continue;if(step.condition==="previousStepFailed"&&prevOk!==false) continue;const fn=payload.functions.find(f=>f.signature===step.signature);if(!fn) throw new Error("Missing function for workflow step: "+step.signature);const args=(argMap&&argMap[step.signature])||[];let ok=false;let attempts=0;let lastErr=null;while(attempts<=step.retryAttempts&&!ok){try{const action=fn.kind==="read"? await api.executeRead(fn,args):await api.executeWrite(fn,args,{});results.push({step:step.id,signature:step.signature,ok:true,action});ok=true;}catch(e){lastErr=e;attempts++;if(attempts<=step.retryAttempts&&step.backoffMs>0){await new Promise(r=>setTimeout(r,step.backoffMs));}}}
 if(!ok){results.push({step:step.id,signature:step.signature,ok:false,error:lastErr?String(lastErr.message||lastErr):"unknown"});if(step.fallback==="abort") {prevOk=false;break;}prevOk=false;continue;}prevOk=true;}
 state.stepResults=results;state.lastStepSucceeded=prevOk;return {bestEffort:true,results};}
@@ -130,6 +129,7 @@ function mapUiForRuntime(
   return {
     name: fn.name,
     signature: fn.signature,
+    selector: fn.canonicalSelectorHint,
     kind: fn.kind,
     customLabel: selection.customLabel,
     description: selection.description,
@@ -185,7 +185,13 @@ export function compileProjectDetailed(rawConfig: unknown): CompileOutput {
     });
   }
 
-  const workflowDiagnostics = validateWorkflows(config);
+  const runtimeArgumentNames = new Map(
+    selectedFns.map((fn) => [
+      fn.signature,
+      new Set(fn.inputs.map((input, idx) => (input.name === "arg" ? `arg${idx}` : input.name))),
+    ]),
+  );
+  const workflowDiagnostics = validateWorkflows(config, runtimeArgumentNames);
   workflowDiagnostics.forEach((diag) => diagnostics.push(diag));
 
   if (diagnostics.some((d) => d.level === "error")) {

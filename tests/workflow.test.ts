@@ -17,3 +17,10 @@ test("Workflow validator warns for retry without backoff", () => {
   const diagnostics = validateWorkflows(config);
   assert.ok(diagnostics.some((d) => d.level === "warning"));
 });
+
+test("Workflow validator reports missing required arguments", () => {
+  const config = structuredClone(sampleProject);
+  config.workflows[0].steps[0].requiredArguments = ["missingArg"];
+  const diagnostics = validateWorkflows(config);
+  assert.ok(diagnostics.some((d) => d.level === "error" && d.message.includes("missing argument")));
+});

@@ -102,6 +102,6 @@ Located in: `/lib/compiler.ts`
 ## Known limitations (explicit)
 
 - Runtime ABI codec covers common Solidity types used in this slice (address, bool, int/uint, bytes/string, arrays, tuples) but is not a full replacement for mature audited ABI libraries.
-- Selector derivation at runtime uses `web3_sha3` through provider RPC.
+- Function selectors are computed at compile time using Keccak-256 and embedded in the generated payload.
 - Workflow execution is best-effort sequential and can partially complete; there is no cross-transaction atomicity.
 - No backend multi-project storage/auth yet (local browser persistence only in this slice).

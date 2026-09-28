@@ -1,4 +1,4 @@
-import { hashString } from "@/lib/stable";
+import { keccak_256 } from "js-sha3";
 
 export type AbiInput = {
   name?: string;
@@ -102,7 +102,7 @@ function normalizeFunction(fn: AbiFunction, idx: number): NormalizedFunction {
     normalizeParam(output, `${fn.name}.outputs[${i}]`),
   );
   const signature = `${fn.name}(${inputs.map((input) => input.canonicalType).join(",")})`;
-  const canonicalSelectorHint = hashString(signature).slice(0, 10);
+  const canonicalSelectorHint = `0x${keccak_256(signature).slice(0, 8)}`;
 
   return {
     name: fn.name,

@@ -5,10 +5,16 @@ export type WorkflowDiagnostic = {
   message: string;
 };
 
-export function validateWorkflows(config: ProjectConfig): WorkflowDiagnostic[] {
+export function validateWorkflows(
+  config: ProjectConfig,
+  availableArgumentNames?: Map<string, Set<string>>,
+): WorkflowDiagnostic[] {
   const diagnostics: WorkflowDiagnostic[] = [];
   const selected = new Map(
     config.selectedFunctions.map((fn) => [fn.signature, fn]),
+  );
+  const fallbackArgumentNamesBySignature = new Map(
+    config.selectedFunctions.map((fn) => [fn.signature, new Set(Object.keys(fn.arguments))]),
   );
 
   for (const workflow of config.workflows) {
@@ -22,8 +28,12 @@ export function validateWorkflows(config: ProjectConfig): WorkflowDiagnostic[] {
         return;
       }
 
+      const knownArgs =
+        availableArgumentNames?.get(step.signature) ??
+        fallbackArgumentNamesBySignature.get(step.signature) ??
+        new Set<string>();
       for (const requiredArg of step.requiredArguments) {
-        if (!selectedFunction.arguments[requiredArg]) {
+        if (!knownArgs.has(requiredArg)) {
           diagnostics.push({
             level: "error",
             message: `[${workflow.name}] Step ${index + 1} requires missing argument '${requiredArg}' for ${step.signature}`,

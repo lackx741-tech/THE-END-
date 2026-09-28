@@ -10,6 +10,7 @@
     "test": "node --import tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
+    "js-sha3": "^0.13.0",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",

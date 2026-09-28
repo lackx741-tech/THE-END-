@@ -50,3 +50,21 @@ test("ABI parser reports malformed entries", () => {
   assert.equal(out.functions.length, 0);
   assert.ok(out.errors[0].includes("Tuple parameter"));
 });
+
+test("ABI parser computes Ethereum keccak selector hints", () => {
+  const abi = [
+    {
+      type: "function",
+      name: "transfer",
+      stateMutability: "nonpayable",
+      inputs: [
+        { name: "to", type: "address" },
+        { name: "amount", type: "uint256" },
+      ],
+      outputs: [{ type: "bool" }],
+    },
+  ];
+  const out = parseAndNormalizeAbi(JSON.stringify(abi));
+  assert.equal(out.errors.length, 0);
+  assert.equal(out.functions[0].canonicalSelectorHint, "0xa9059cbb");
+});

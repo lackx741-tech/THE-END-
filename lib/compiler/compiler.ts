@@ -105,9 +105,17 @@ function ensureRoot(){
  return root;
 }
 function parseValue(meta, raw){
- if(meta.isArray || meta.isTuple){
-  if(raw === '') return meta.isArray ? [] : {};
-  return JSON.parse(raw);
+ if(meta.isArray){
+  if(raw === '') return [];
+  const parsed=JSON.parse(raw);
+  if(!Array.isArray(parsed)) throw new Error('Expected a JSON array for '+meta.name+'.');
+  return parsed;
+ }
+ if(meta.isTuple){
+  if(raw === '') return {};
+  const parsed=JSON.parse(raw);
+  if(!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('Expected a JSON object for '+meta.name+'.');
+  return parsed;
  }
  const type=meta.canonicalType;
  if(type === 'bool') return raw === 'true';

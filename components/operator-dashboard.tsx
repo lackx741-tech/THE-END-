@@ -27,6 +27,18 @@ function selectedMap(items: SelectedFunctionConfig[]) {
   return new Map(items.map((item) => [item.signature, item]));
 }
 
+function renumberSelectedFunctions(items: SelectedFunctionConfig[]) {
+  return [...items]
+    .sort((left, right) => {
+      if (left.order !== right.order) {
+        return left.order - right.order;
+      }
+
+      return left.signature.localeCompare(right.signature);
+    })
+    .map((item, index) => ({ ...item, order: index + 1 }));
+}
+
 export function OperatorDashboard() {
   const [project, setProject] = useState<ProjectConfig>(cloneSample);
   const [abiText, setAbiText] = useState(prettyJson(sampleErc20Config.contract.abi));
@@ -113,20 +125,22 @@ export function OperatorDashboard() {
       if (existing) {
         return {
           ...current,
-          selectedFunctions: current.selectedFunctions.filter((item) => item.signature !== signature),
+          selectedFunctions: renumberSelectedFunctions(
+            current.selectedFunctions.filter((item) => item.signature !== signature),
+          ),
         };
       }
 
       return {
         ...current,
-        selectedFunctions: [
+        selectedFunctions: renumberSelectedFunctions([
           ...current.selectedFunctions,
           {
             signature,
             label,
             order: current.selectedFunctions.length + 1,
           },
-        ],
+        ]),
       };
     });
   }
@@ -134,8 +148,10 @@ export function OperatorDashboard() {
   function updateSelectedFunction(signature: string, patch: Partial<SelectedFunctionConfig>) {
     setProject((current) => ({
       ...current,
-      selectedFunctions: current.selectedFunctions.map((item) =>
-        item.signature === signature ? { ...item, ...patch } : item,
+      selectedFunctions: renumberSelectedFunctions(
+        current.selectedFunctions.map((item) =>
+          item.signature === signature ? { ...item, ...patch } : item,
+        ),
       ),
     }));
   }

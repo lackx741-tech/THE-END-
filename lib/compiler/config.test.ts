@@ -32,4 +32,28 @@ describe("validateProjectConfig", () => {
       }),
     ).toThrow("Workflow step references a function that is not selected");
   });
+
+  it("rejects workflows with unknown argument binding keys", () => {
+    expect(() =>
+      validateProjectConfig({
+        ...sampleErc20Config,
+        workflows: [
+          {
+            ...sampleErc20Config.workflows[0],
+            steps: [
+              {
+                ...sampleErc20Config.workflows[0].steps[0],
+                argumentBindings: {
+                  invalidArg: {
+                    source: "static",
+                    value: "0x0000000000000000000000000000000000000000",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('Workflow step binding references unknown argument "invalidArg"');
+  });
 });

@@ -46,6 +46,8 @@ No private keys or client-side signing libraries are added. The browser runtime 
 
 ## Local setup
 
+Use Node.js 20.9.0 or newer.
+
 ```bash
 npm install
 THE_END_ENABLE_OPERATOR_DASHBOARD=true npm run dev

@@ -39,6 +39,14 @@ function renumberSelectedFunctions(items: SelectedFunctionConfig[]) {
     .map((item, index) => ({ ...item, order: index + 1 }));
 }
 
+function fieldId(...parts: string[]) {
+  return parts
+    .join("-")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function OperatorDashboard() {
   const [project, setProject] = useState<ProjectConfig>(cloneSample);
   const [abiText, setAbiText] = useState(prettyJson(sampleErc20Config.contract.abi));
@@ -218,26 +226,41 @@ export function OperatorDashboard() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Project name</label>
+              <label className="text-sm text-slate-300" htmlFor="project-name">
+                Project name
+              </label>
               <Input
+                id="project-name"
                 value={project.projectName}
                 onChange={(event) => updateProject({ projectName: event.target.value })}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Version</label>
-              <Input value={project.version} onChange={(event) => updateProject({ version: event.target.value })} />
+              <label className="text-sm text-slate-300" htmlFor="project-version">
+                Version
+              </label>
+              <Input
+                id="project-version"
+                value={project.version}
+                onChange={(event) => updateProject({ version: event.target.value })}
+              />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Chain name</label>
+              <label className="text-sm text-slate-300" htmlFor="chain-name">
+                Chain name
+              </label>
               <Input
+                id="chain-name"
                 value={project.chain.name}
                 onChange={(event) => updateProject({ chain: { ...project.chain, name: event.target.value } })}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300">Chain ID</label>
+              <label className="text-sm text-slate-300" htmlFor="chain-id">
+                Chain ID
+              </label>
               <Input
+                id="chain-id"
                 type="number"
                 value={String(project.chain.chainId)}
                 onChange={(event) =>
@@ -249,8 +272,11 @@ export function OperatorDashboard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm text-slate-300">Contract address</label>
+              <label className="text-sm text-slate-300" htmlFor="contract-address">
+                Contract address
+              </label>
               <Input
+                id="contract-address"
                 value={project.contract.address}
                 onChange={(event) =>
                   setProject((current) => ({
@@ -262,8 +288,11 @@ export function OperatorDashboard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm text-slate-300">Backend /sign endpoint</label>
+              <label className="text-sm text-slate-300" htmlFor="backend-sign">
+                Backend /sign endpoint
+              </label>
               <Input
+                id="backend-sign"
                 value={project.backendEndpoints.sign}
                 onChange={(event) =>
                   updateProject({
@@ -273,8 +302,11 @@ export function OperatorDashboard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm text-slate-300">Backend /execute endpoint</label>
+              <label className="text-sm text-slate-300" htmlFor="backend-execute">
+                Backend /execute endpoint
+              </label>
               <Input
+                id="backend-execute"
                 value={project.backendEndpoints.execute}
                 onChange={(event) =>
                   updateProject({
@@ -284,8 +316,11 @@ export function OperatorDashboard() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm text-slate-300">Optional public config endpoint</label>
+              <label className="text-sm text-slate-300" htmlFor="backend-public-config">
+                Optional public config endpoint
+              </label>
               <Input
+                id="backend-public-config"
                 value={project.backendEndpoints.publicConfig ?? ""}
                 onChange={(event) =>
                   updateProject({
@@ -399,7 +434,15 @@ export function OperatorDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <Textarea value={abiText} onChange={(event) => setAbiText(event.target.value)} className="min-h-[420px]" />
+            <label className="mb-2 block text-sm text-slate-300" htmlFor="abi-json">
+              ABI JSON
+            </label>
+            <Textarea
+              id="abi-json"
+              value={abiText}
+              onChange={(event) => setAbiText(event.target.value)}
+              className="min-h-[420px]"
+            />
           </CardContent>
         </Card>
 
@@ -419,10 +462,13 @@ export function OperatorDashboard() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-3">
                         <Checkbox
+                          id={fieldId("select", fn.signature)}
                           checked={Boolean(current)}
                           onChange={() => toggleFunction(fn.signature, fn.name)}
                         />
-                        <span className="font-medium text-white">{fn.signature}</span>
+                        <label className="font-medium text-white" htmlFor={fieldId("select", fn.signature)}>
+                          {fn.signature}
+                        </label>
                         <Badge>{fn.kind}</Badge>
                       </div>
                       <p className="text-sm text-slate-400">
@@ -433,8 +479,11 @@ export function OperatorDashboard() {
                   {current ? (
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       <div className="space-y-2 md:col-span-2">
-                        <label className="text-sm text-slate-300">Public label</label>
+                        <label className="text-sm text-slate-300" htmlFor={fieldId(fn.signature, "label")}>
+                          Public label
+                        </label>
                         <Input
+                          id={fieldId(fn.signature, "label")}
                           value={current.label}
                           onChange={(event) =>
                             updateSelectedFunction(fn.signature, { label: event.target.value })
@@ -442,8 +491,11 @@ export function OperatorDashboard() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm text-slate-300">Order</label>
+                        <label className="text-sm text-slate-300" htmlFor={fieldId(fn.signature, "order")}>
+                          Order
+                        </label>
                         <Input
+                          id={fieldId(fn.signature, "order")}
                           type="number"
                           value={String(current.order)}
                           onChange={(event) =>
@@ -452,8 +504,14 @@ export function OperatorDashboard() {
                         />
                       </div>
                       <div className="space-y-2 md:col-span-2">
-                        <label className="text-sm text-slate-300">Description</label>
+                        <label
+                          className="text-sm text-slate-300"
+                          htmlFor={fieldId(fn.signature, "description")}
+                        >
+                          Description
+                        </label>
                         <Input
+                          id={fieldId(fn.signature, "description")}
                           value={current.description ?? ""}
                           onChange={(event) =>
                             updateSelectedFunction(fn.signature, { description: event.target.value })
@@ -462,8 +520,14 @@ export function OperatorDashboard() {
                       </div>
                       {fn.inputs.map((input) => (
                         <div key={input.name} className="space-y-2">
-                          <label className="text-sm text-slate-300">{input.name} default</label>
+                          <label
+                            className="text-sm text-slate-300"
+                            htmlFor={fieldId(fn.signature, input.name, "default")}
+                          >
+                            {input.name} default
+                          </label>
                           <Input
+                            id={fieldId(fn.signature, input.name, "default")}
                             value={current.defaults?.[input.name] ?? ""}
                             onChange={(event) =>
                               updateSelectedFunction(fn.signature, {
@@ -505,8 +569,11 @@ export function OperatorDashboard() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">EIP-712 domain name</label>
+                <label className="text-sm text-slate-300" htmlFor="eip712-name">
+                  EIP-712 domain name
+                </label>
                 <Input
+                  id="eip712-name"
                   value={project.eip712.name}
                   onChange={(event) =>
                     updateProject({ eip712: { ...project.eip712, name: event.target.value } })
@@ -514,8 +581,11 @@ export function OperatorDashboard() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">EIP-712 domain version</label>
+                <label className="text-sm text-slate-300" htmlFor="eip712-version">
+                  EIP-712 domain version
+                </label>
                 <Input
+                  id="eip712-version"
                   value={project.eip712.version}
                   onChange={(event) =>
                     updateProject({ eip712: { ...project.eip712, version: event.target.value } })
@@ -523,7 +593,11 @@ export function OperatorDashboard() {
                 />
               </div>
             </div>
+            <label className="text-sm text-slate-300" htmlFor="workflow-json">
+              Workflow JSON
+            </label>
             <Textarea
+              id="workflow-json"
               value={workflowText}
               onChange={(event) => setWorkflowText(event.target.value)}
               className="min-h-[260px]"

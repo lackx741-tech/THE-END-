@@ -168,6 +168,8 @@ async function executeFunction(fn,args,options){
 }
 function renderStatus(container,status,payload){
  container.className='te-status '+(statusClassMap[status] || statusClassMap.idle);
+ container.setAttribute('role','status');
+ container.setAttribute('aria-live','polite');
  container.textContent=typeof payload === 'string' ? payload : JSON.stringify(payload,null,2);
 }
 function escapeRuntimeString(value){

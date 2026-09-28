@@ -1,4 +1,3 @@
-import { slugify } from "@/lib/utils";
 import type {
   AbiEntry,
   AbiFunctionEntry,
@@ -7,6 +6,20 @@ import type {
   ParsedAbiFunction,
   ParsedAbiParameter,
 } from "@/lib/compiler/types";
+
+function functionId(signature: string) {
+  const base = signature
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  const checksum = signature
+    .split("")
+    .reduce((sum, character, index) => (sum + character.charCodeAt(0) * (index + 1)) % 1000000007, 0)
+    .toString(36);
+
+  return `${base || "fn"}-${checksum}`;
+}
 
 function inferStateMutability(entry: AbiFunctionEntry): AbiStateMutability {
   if (entry.stateMutability) {
@@ -80,7 +93,7 @@ export function parseAbi(abi: AbiEntry[]): ParsedAbiFunction[] {
       const signature = functionSignature(entry);
 
       return {
-        id: slugify(signature),
+        id: functionId(signature),
         name: entry.name,
         signature,
         stateMutability,

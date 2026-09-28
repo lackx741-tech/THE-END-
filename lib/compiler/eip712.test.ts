@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAbi } from "@/lib/compiler/abi";
-import { buildTypedDataTemplate } from "@/lib/compiler/eip712";
+import { buildTypedDataDocument, buildTypedDataTemplate } from "@/lib/compiler/eip712";
 import { sampleErc20Config } from "@/lib/samples/erc20";
 
 describe("buildTypedDataTemplate", () => {
@@ -35,5 +35,25 @@ describe("buildTypedDataTemplate", () => {
         { name: "amounts", type: "uint256[]" },
       ]),
     );
+  });
+
+  it("assembles the final typed-data document with domain and message overrides", () => {
+    const transferFunction = parsed.find((item) => item.signature === "transfer(address,uint256)");
+    const typedData = buildTypedDataDocument(
+      transferFunction!,
+      sampleErc20Config.eip712,
+      sampleErc20Config.projectName,
+      {
+        recipient: "0x000000000000000000000000000000000000dEaD",
+        amount: "42",
+      },
+    );
+    const message = typedData.message as Record<string, unknown>;
+
+    expect(typedData.domain).toEqual(sampleErc20Config.eip712);
+    expect(message.projectName).toBe(sampleErc20Config.projectName);
+    expect(message.functionSignature).toBe("transfer(address,uint256)");
+    expect(message.recipient).toBe("0x000000000000000000000000000000000000dEaD");
+    expect(message.amount).toBe("42");
   });
 });

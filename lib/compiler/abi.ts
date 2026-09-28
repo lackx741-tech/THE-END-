@@ -39,30 +39,41 @@ function inferStateMutability(entry: AbiFunctionEntry): AbiStateMutability {
   return "nonpayable";
 }
 
-export function canonicalAbiType(parameter: AbiParameter): string {
-  if (!parameter.type.startsWith("tuple")) {
-    const arraySuffixMatch = parameter.type.match(/(\[[^\]]*\])+$/);
-    const arraySuffix = arraySuffixMatch?.[0] ?? "";
-    const baseType = parameter.type.slice(0, parameter.type.length - arraySuffix.length);
-    const canonicalBaseType =
-      baseType === "uint"
-        ? "uint256"
-        : baseType === "int"
-          ? "int256"
-          : baseType === "byte"
-            ? "bytes1"
-            : baseType === "fixed"
-              ? "fixed128x18"
-              : baseType === "ufixed"
-                ? "ufixed128x18"
-                : baseType;
+function splitArraySuffix(type: string) {
+  const arraySuffixMatch = type.match(/(\[[^\]]*\])+$/);
+  const arraySuffix = arraySuffixMatch?.[0] ?? "";
+  const baseType = type.slice(0, type.length - arraySuffix.length);
 
-    return `${canonicalBaseType}${arraySuffix}`;
+  return { baseType, arraySuffix };
+}
+
+function canonicalizeElementaryType(type: string) {
+  const { baseType, arraySuffix } = splitArraySuffix(type);
+  const canonicalBaseType =
+    baseType === "uint"
+      ? "uint256"
+      : baseType === "int"
+        ? "int256"
+        : baseType === "byte"
+          ? "bytes1"
+          : baseType === "fixed"
+            ? "fixed128x18"
+            : baseType === "ufixed"
+              ? "ufixed128x18"
+              : baseType;
+
+  return `${canonicalBaseType}${arraySuffix}`;
+}
+
+export function canonicalAbiType(parameter: AbiParameter): string {
+  const { baseType, arraySuffix } = splitArraySuffix(parameter.type);
+
+  if (baseType !== "tuple") {
+    return canonicalizeElementaryType(parameter.type);
   }
 
-  const suffix = parameter.type.slice("tuple".length);
   const componentTypes = (parameter.components ?? []).map(canonicalAbiType).join(",");
-  return `(${componentTypes})${suffix}`;
+  return `(${componentTypes})${arraySuffix}`;
 }
 
 function parseParameter(parameter: AbiParameter, index: number): ParsedAbiParameter {

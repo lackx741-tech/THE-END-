@@ -64,15 +64,16 @@ export function OperatorDashboard() {
           const existing = selected.get(item.signature)!;
           return { ...existing, order: existing.order ?? index + 1 };
         });
-
-      setProject((current) => ({
-        ...current,
+      const nextProject = validateProjectConfig({
+        ...project,
         contract: {
-          ...current.contract,
+          ...project.contract,
           abi: parsed,
         },
         selectedFunctions: nextSelected,
-      }));
+      });
+
+      setProject(nextProject);
       setError("");
       setStatus(`Parsed ABI successfully with ${abiFunctions.length} callable functions.`);
     } catch (nextError) {
@@ -83,7 +84,8 @@ export function OperatorDashboard() {
   function syncWorkflows() {
     try {
       const parsed = JSON.parse(workflowText) as WorkflowConfig[];
-      setProject((current) => ({ ...current, workflows: parsed }));
+      const nextProject = validateProjectConfig({ ...project, workflows: parsed });
+      setProject(nextProject);
       setError("");
       setStatus(`Loaded ${parsed.length} workflow definition(s).`);
     } catch (nextError) {
@@ -109,9 +111,10 @@ export function OperatorDashboard() {
   const importAbiFile = async (file: File) => {
     try {
       const text = await file.text();
-      setAbiText(text);
-      setProject((current) => applyAbiTextToProject(current, text).project);
       const abiFunctions = parseAbiJson(text);
+      const nextProject = validateProjectConfig(applyAbiTextToProject(project, text).project);
+      setAbiText(text);
+      setProject(nextProject);
       setError("");
       setStatus(`Uploaded ABI with ${abiFunctions.length} callable functions.`);
     } catch (nextError) {

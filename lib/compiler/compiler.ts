@@ -302,7 +302,8 @@ function render(){
       Object.keys(bindings).forEach(function(key){
        const binding=bindings[key];
        if(binding.source === 'previousResult'){
-        args[key]=getPathValue(results[results.length - 1] || {}, binding.path || '');
+        const previousEntry=results[results.length - 1];
+        args[key]=getPathValue(previousEntry && previousEntry.result ? previousEntry.result : (previousEntry || {}), binding.path || '');
        }else{
         args[key]=binding.value;
        }

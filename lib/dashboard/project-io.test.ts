@@ -14,6 +14,7 @@ describe("project config IO", () => {
     const result = applyAbiTextToProject(sampleErc20Config, nextAbi);
     expect(result.functionCount).toBe(1);
     expect(result.project.selectedFunctions.map((item) => item.signature)).toEqual(["balanceOf(address)"]);
+    expect(result.project.workflows).toEqual([]);
   });
 
   it("throws on invalid JSON imports", () => {

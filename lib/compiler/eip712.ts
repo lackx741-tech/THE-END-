@@ -3,6 +3,7 @@ import type {
   ParsedAbiFunction,
   ParsedAbiParameter,
 } from "@/lib/compiler/types";
+import { signatureIdentifierSuffix } from "@/lib/compiler/abi";
 
 export interface Eip712Field {
   name: string;
@@ -31,16 +32,8 @@ function toTypeBaseName(value: string) {
     .join("");
 }
 
-function checksum(value: string) {
-  return value
-    .split("")
-    .reduce((sum, character, index) => (sum + character.charCodeAt(0) * (index + 1)) % 100000, 0)
-    .toString()
-    .padStart(5, "0");
-}
-
-function buildTupleTypeName(parentType: string, parameter: ParsedAbiParameter) {
-  return `${parentType}${toTypeBaseName(parameter.name)}`;
+function buildTupleTypeName(parentType: string, parameter: ParsedAbiParameter, path: number[]) {
+  return `${parentType}${toTypeBaseName(parameter.name)}${path.join("x")}`;
 }
 
 function createMessageDefault(parameter: ParsedAbiParameter): unknown {
@@ -63,16 +56,17 @@ function addParameterTypes(
   parameter: ParsedAbiParameter,
   parentType: string,
   types: Record<string, Eip712Field[]>,
+  path: number[],
 ): string {
   if (!parameter.isTuple) {
     return parameter.canonicalType;
   }
 
-  const tupleTypeName = buildTupleTypeName(parentType, parameter);
+  const tupleTypeName = buildTupleTypeName(parentType, parameter, path);
   if (!types[tupleTypeName]) {
-    types[tupleTypeName] = parameter.components.map((component) => ({
+    types[tupleTypeName] = parameter.components.map((component, index) => ({
       name: component.name,
-      type: addParameterTypes(component, tupleTypeName, types),
+      type: addParameterTypes(component, tupleTypeName, types, [...path, index]),
     }));
   }
 
@@ -80,7 +74,7 @@ function addParameterTypes(
 }
 
 export function buildTypedDataTemplate(parsedFunction: ParsedAbiFunction): Eip712Template {
-  const primaryType = `${toTypeBaseName(parsedFunction.name)}${checksum(parsedFunction.signature)}Request`;
+  const primaryType = `${toTypeBaseName(parsedFunction.name)}${signatureIdentifierSuffix(parsedFunction.signature)}Request`;
   const types: Record<string, Eip712Field[]> = {
     EIP712Domain: DOMAIN_FIELDS,
   };
@@ -88,9 +82,9 @@ export function buildTypedDataTemplate(parsedFunction: ParsedAbiFunction): Eip71
   types[primaryType] = [
     { name: "projectName", type: "string" },
     { name: "functionSignature", type: "string" },
-    ...parsedFunction.inputs.map((parameter) => ({
+    ...parsedFunction.inputs.map((parameter, index) => ({
       name: parameter.name,
-      type: addParameterTypes(parameter, primaryType, types),
+      type: addParameterTypes(parameter, primaryType, types, [index]),
     })),
   ];
 

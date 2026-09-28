@@ -15,4 +15,51 @@ describe("parseAbiJson", () => {
   it("rejects non-array ABI JSON", () => {
     expect(() => parseAbiJson("{}")) .toThrow("ABI JSON must be an array.");
   });
+
+  it("canonicalizes ABI aliases and keeps overload ids distinct", () => {
+    const functions = parseAbiJson(
+      JSON.stringify([
+        {
+          type: "function",
+          name: "foo",
+          inputs: [
+            { name: "first", type: "address" },
+            { name: "second", type: "address[]" },
+            { name: "third", type: "address[]" },
+            { name: "fourth", type: "address" },
+          ],
+          outputs: [],
+        },
+        {
+          type: "function",
+          name: "foo",
+          inputs: [
+            { name: "first", type: "address[]" },
+            { name: "second", type: "address" },
+            { name: "third", type: "address" },
+            { name: "fourth", type: "address[]" },
+          ],
+          outputs: [],
+        },
+        {
+          type: "function",
+          name: "aliases",
+          inputs: [
+            { name: "count", type: "int" },
+            { name: "single", type: "byte" },
+            { name: "price", type: "fixed" },
+            { name: "rate", type: "ufixed" },
+          ],
+          outputs: [],
+        },
+      ]),
+    );
+
+    expect(functions.map((item) => item.signature)).toContain("foo(address,address[],address[],address)");
+    expect(functions.map((item) => item.signature)).toContain("foo(address[],address,address,address[])");
+    expect(new Set(functions.map((item) => item.id)).size).toBe(functions.length);
+    expect(functions.find((item) => item.name === "aliases")?.signature).toBe(
+      "aliases(int256,bytes1,fixed128x18,ufixed128x18)",
+    );
+  });
 });

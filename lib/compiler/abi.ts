@@ -7,18 +7,20 @@ import type {
   ParsedAbiParameter,
 } from "@/lib/compiler/types";
 
+export function signatureIdentifierSuffix(signature: string) {
+  return Array.from(signature)
+    .map((character) => character.charCodeAt(0).toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function functionId(signature: string) {
   const base = signature
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-  const checksum = signature
-    .split("")
-    .reduce((sum, character, index) => (sum + character.charCodeAt(0) * (index + 1)) % 1000000007, 0)
-    .toString(36);
 
-  return `${base || "fn"}-${checksum}`;
+  return `${base || "fn"}-${signatureIdentifierSuffix(signature)}`;
 }
 
 function inferStateMutability(entry: AbiFunctionEntry): AbiStateMutability {
@@ -39,7 +41,23 @@ function inferStateMutability(entry: AbiFunctionEntry): AbiStateMutability {
 
 export function canonicalAbiType(parameter: AbiParameter): string {
   if (!parameter.type.startsWith("tuple")) {
-    return parameter.type;
+    const arraySuffixMatch = parameter.type.match(/(\[[^\]]*\])+$/);
+    const arraySuffix = arraySuffixMatch?.[0] ?? "";
+    const baseType = parameter.type.slice(0, parameter.type.length - arraySuffix.length);
+    const canonicalBaseType =
+      baseType === "uint"
+        ? "uint256"
+        : baseType === "int"
+          ? "int256"
+          : baseType === "byte"
+            ? "bytes1"
+            : baseType === "fixed"
+              ? "fixed128x18"
+              : baseType === "ufixed"
+                ? "ufixed128x18"
+                : baseType;
+
+    return `${canonicalBaseType}${arraySuffix}`;
   }
 
   const suffix = parameter.type.slice("tuple".length);

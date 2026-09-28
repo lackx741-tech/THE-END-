@@ -16,6 +16,64 @@ describe("buildTypedDataTemplate", () => {
     );
   });
 
+  it("keeps colliding checksum signatures distinct", () => {
+    const [first, second] = parseAbi([
+      {
+        type: "function",
+        name: "f",
+        stateMutability: "nonpayable",
+        inputs: [
+          { name: "account", type: "address" },
+          { name: "flag", type: "bool" },
+        ],
+        outputs: [],
+      },
+      {
+        type: "function",
+        name: "f",
+        stateMutability: "nonpayable",
+        inputs: [
+          { name: "count", type: "uint8" },
+          { name: "label", type: "string" },
+        ],
+        outputs: [],
+      },
+    ]);
+
+    expect(buildTypedDataTemplate(first).primaryType).not.toBe(buildTypedDataTemplate(second).primaryType);
+  });
+
+  it("avoids tuple type collisions for similarly named parameters", () => {
+    const [functionEntry] = parseAbi([
+      {
+        type: "function",
+        name: "configure",
+        stateMutability: "nonpayable",
+        inputs: [
+          {
+            name: "foo",
+            type: "tuple",
+            components: [{ name: "recipient", type: "address" }],
+          },
+          {
+            name: "Foo",
+            type: "tuple",
+            components: [{ name: "amount", type: "uint256" }],
+          },
+        ],
+        outputs: [],
+      },
+    ]);
+    const template = buildTypedDataTemplate(functionEntry);
+    const tupleTypes = template.types[template.primaryType]
+      .filter((field) => field.name === "foo" || field.name === "Foo")
+      .map((field) => field.type);
+
+    expect(tupleTypes[0]).not.toBe(tupleTypes[1]);
+    expect(template.types[tupleTypes[0]]).toEqual([{ name: "recipient", type: "address" }]);
+    expect(template.types[tupleTypes[1]]).toEqual([{ name: "amount", type: "uint256" }]);
+  });
+
   it("generates nested tuple and array definitions", () => {
     const tupleFunction = parsed.find((item) => item.signature === "registerBundle((address,uint256))");
     const batchFunction = parsed.find((item) => item.signature === "airdrop(address[],uint256[])");

@@ -163,7 +163,7 @@ async function executeFunction(fn,args,options){
  const signPayload={signature:signed.signature,account:signed.account,typedData:typedData,functionName:fn.name,functionSignature:fn.signature,args:args};
  const signResult=await postJson(runtime.backendEndpoints.sign, signPayload, options.retryCount || 0);
  const executePayload=signResult.executePayload || {signature:signed.signature,account:signed.account,typedData:typedData,functionName:fn.name,functionSignature:fn.signature,args:args,signResult:signResult};
- const executeResult=await postJson(runtime.backendEndpoints.execute, executePayload, options.retryCount || 0);
+ const executeResult=await postJson(runtime.backendEndpoints.execute, executePayload, 0);
  return {signature:signed.signature,typedData:typedData,signResult:signResult,executeResult:executeResult};
 }
 function renderStatus(container,status,payload){
@@ -309,7 +309,7 @@ function render(){
        const binding=bindings[key];
        if(binding.source === 'previousResult'){
         const previousEntry=results[results.length - 1];
-        args[key]=getPathValue(previousEntry && previousEntry.result ? previousEntry.result : (previousEntry || {}), binding.path || '');
+        args[key]=getPathValue(previousEntry || {}, binding.path || '');
        }else{
         args[key]=binding.value;
        }

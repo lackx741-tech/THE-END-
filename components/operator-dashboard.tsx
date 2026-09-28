@@ -4,7 +4,7 @@ import { Download, FileCode2, RefreshCcw, Sparkles, Wand2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { parseAbi, parseAbiJson } from "@/lib/compiler/abi";
 import { compileStandaloneScript } from "@/lib/compiler/compiler";
-import { validateProjectConfig } from "@/lib/compiler/config";
+import { pruneWorkflowsForSelectedFunctions, validateProjectConfig } from "@/lib/compiler/config";
 import type { AbiEntry, ProjectConfig, SelectedFunctionConfig, WorkflowConfig } from "@/lib/compiler/types";
 import { applyAbiTextToProject, parseProjectConfigText } from "@/lib/dashboard/project-io";
 import { sampleErc20Config } from "@/lib/samples/erc20";
@@ -79,6 +79,7 @@ export function OperatorDashboard() {
           abi: parsed,
         },
         selectedFunctions: nextSelected,
+        workflows: pruneWorkflowsForSelectedFunctions(project.workflows, nextSelected),
       });
 
       setProject(nextProject);

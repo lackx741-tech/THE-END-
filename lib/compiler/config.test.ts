@@ -56,4 +56,28 @@ describe("validateProjectConfig", () => {
       }),
     ).toThrow('Workflow step binding references unknown argument "invalidArg"');
   });
+
+  it("rejects workflows with missing argument bindings", () => {
+    expect(() =>
+      validateProjectConfig({
+        ...sampleErc20Config,
+        workflows: [
+          {
+            ...sampleErc20Config.workflows[0],
+            steps: [
+              {
+                ...sampleErc20Config.workflows[0].steps[0],
+                argumentBindings: {
+                  spender: {
+                    source: "static",
+                    value: "0x0000000000000000000000000000000000000000",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('Workflow step is missing binding for argument "amount"');
+  });
 });

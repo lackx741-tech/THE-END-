@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseAbi } from "@/lib/compiler/abi";
-import type { ProjectConfig, SelectedFunctionConfig } from "@/lib/compiler/types";
+import type { ProjectConfig, SelectedFunctionConfig, WorkflowConfig } from "@/lib/compiler/types";
 
 const abiEntrySchema = z.object({
   type: z.string(),
@@ -74,6 +74,20 @@ export function normalizeSelectedFunctions(items: SelectedFunctionConfig[]) {
   });
 }
 
+export function pruneWorkflowsForSelectedFunctions(
+  workflows: WorkflowConfig[],
+  selectedFunctions: SelectedFunctionConfig[],
+) {
+  const selectedSignatures = new Set(selectedFunctions.map((item) => item.signature));
+
+  return workflows
+    .map((workflow) => ({
+      ...workflow,
+      steps: workflow.steps.filter((step) => selectedSignatures.has(step.functionSignature)),
+    }))
+    .filter((workflow) => workflow.steps.length > 0);
+}
+
 export function validateProjectConfig(config: ProjectConfig) {
   const parsedConfig = configSchema.parse(config);
   const parsedAbi = parseAbi(parsedConfig.contract.abi);
@@ -105,10 +119,18 @@ export function validateProjectConfig(config: ProjectConfig) {
       }
       const targetFunction = abiMap.get(step.functionSignature);
       const inputNames = new Set(targetFunction?.inputs.map((input) => input.name) ?? []);
-      for (const bindingName of Object.keys(step.argumentBindings ?? {})) {
+      const bindings = step.argumentBindings ?? {};
+      for (const bindingName of Object.keys(bindings)) {
         if (!inputNames.has(bindingName)) {
           throw new Error(
             `Workflow step binding references unknown argument "${bindingName}" for ${step.functionSignature}`,
+          );
+        }
+      }
+      for (const inputName of inputNames) {
+        if (!(inputName in bindings)) {
+          throw new Error(
+            `Workflow step is missing binding for argument "${inputName}" for ${step.functionSignature}`,
           );
         }
       }

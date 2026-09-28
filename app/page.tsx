@@ -359,7 +359,10 @@ export default function Home() {
                       >
                         <div className="font-mono text-xs text-slate-400">{step.id}</div>
                         <div className="mt-1 grid gap-2 md:grid-cols-2">
-                          <label className="text-xs text-slate-300">
+                          <label
+                            className="text-xs text-slate-300"
+                            htmlFor={`${workflow.name}-${step.id}-signature`}
+                          >
                             Signature
                             {(() => {
                               const signatures = config.selectedFunctions.map((fn) => fn.signature);
@@ -371,6 +374,7 @@ export default function Home() {
                                   : "__missing";
                               return (
                             <select
+                              id={`${workflow.name}-${step.id}-signature`}
                               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2"
                               value={selectValue}
                               onChange={(event) =>
@@ -396,9 +400,13 @@ export default function Home() {
                               );
                             })()}
                           </label>
-                          <label className="text-xs text-slate-300">
+                          <label
+                            className="text-xs text-slate-300"
+                            htmlFor={`${workflow.name}-${step.id}-condition`}
+                          >
                             Condition
                             <select
+                              id={`${workflow.name}-${step.id}-condition`}
                               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2"
                               value={step.condition}
                               onChange={(event) =>
@@ -434,9 +442,13 @@ export default function Home() {
                             }
                             type="number"
                           />
-                          <label className="text-xs text-slate-300">
+                          <label
+                            className="text-xs text-slate-300"
+                            htmlFor={`${workflow.name}-${step.id}-fallback`}
+                          >
                             Fallback
                             <select
+                              id={`${workflow.name}-${step.id}-fallback`}
                               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2"
                               value={step.fallback}
                               onChange={(event) =>

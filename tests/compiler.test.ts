@@ -157,3 +157,113 @@ test("Generated runtime submits write tx with value/fee fields and polls receipt
   assert.ok(tx.data.startsWith("0xa9059cbb"));
   assert.ok(receiptChecks >= 2);
 });
+
+test("Generated runtime encodes tuple object arguments for write calls", async () => {
+  const tupleProject = structuredClone(sampleProject);
+  tupleProject.rawAbiJson = JSON.stringify(
+    [
+      {
+        type: "function",
+        name: "setPair",
+        stateMutability: "nonpayable",
+        inputs: [
+          {
+            name: "pair",
+            type: "tuple",
+            components: [
+              { name: "owner", type: "address" },
+              { name: "amount", type: "uint256" },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ],
+    null,
+    2,
+  );
+  tupleProject.selectedFunctions = [
+    {
+      signature: "setPair((address,uint256))",
+      order: 0,
+      customLabel: "setPair",
+      description: "",
+      arguments: {},
+    },
+  ];
+  tupleProject.workflows = [];
+  const compiled = compileProjectDetailed(tupleProject);
+  const calls: Array<{ method: string; params?: unknown[] }> = [];
+  const provider = {
+    async request({
+      method,
+      params,
+    }: {
+      method: string;
+      params?: unknown[];
+    }): Promise<unknown> {
+      calls.push({ method, params });
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_requestAccounts")
+        return ["0x0000000000000000000000000000000000000001"];
+      if (method === "eth_sendTransaction") return "0xhash";
+      if (method === "eth_getTransactionReceipt")
+        return { status: "0x1", transactionHash: "0xhash" };
+      throw new Error(`Unexpected method ${method}`);
+    },
+  };
+
+  const makeElement = () => ({
+    className: "",
+    textContent: "",
+    value: "",
+    placeholder: "",
+    dataset: {} as Record<string, string>,
+    appendChild() {},
+    set onclick(_handler: unknown) {},
+  });
+  const root = { innerHTML: "", appendChild() {} };
+  const context: Record<string, unknown> = {
+    window: { ethereum: provider, EndTxClient: undefined },
+    document: {
+      querySelector: () => root,
+      body: root,
+      head: root,
+      getElementById: () => null,
+      createElement: () => makeElement(),
+    },
+    TextEncoder,
+    TextDecoder,
+    setTimeout: (fn: () => void) => {
+      fn();
+      return 0;
+    },
+    clearTimeout: () => {},
+  };
+  vm.runInNewContext(compiled.script, context);
+  const client = (
+    context.window as {
+      EndTxClient?: { client?: { executeWrite: (...args: unknown[]) => Promise<unknown> } };
+    }
+  ).EndTxClient?.client;
+  const tupleFn = (
+    context.window as {
+      EndTxClient?: { payload?: { functions?: Array<{ signature: string }> } };
+    }
+  ).EndTxClient?.payload?.functions?.find(
+    (fn) => fn.signature === "setPair((address,uint256))",
+  );
+  assert.ok(client && tupleFn);
+
+  await client!.executeWrite(
+    tupleFn,
+    [{ owner: "0x0000000000000000000000000000000000000003", amount: "7" }],
+    {},
+  );
+
+  const sendTxCall = calls.find((call) => call.method === "eth_sendTransaction");
+  assert.ok(sendTxCall);
+  const data = ((sendTxCall!.params?.[0] as Record<string, string>).data ?? "").toLowerCase();
+  assert.ok(data.includes("0000000000000000000000000000000000000000000000000000000000000007"));
+  assert.ok(data.includes("0000000000000000000000000000000000000003"));
+});

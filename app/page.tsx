@@ -55,7 +55,10 @@ export default function Home() {
   }, [config]);
 
   const abi = useMemo(() => parseAndNormalizeAbi(config.rawAbiJson), [config.rawAbiJson]);
-  const selectedSignatures = new Set(config.selectedFunctions.map((fn) => fn.signature));
+  const selectedSignatures = useMemo(
+    () => new Set(config.selectedFunctions.map((fn) => fn.signature)),
+    [config.selectedFunctions],
+  );
 
   const filteredFns = abi.functions.filter((fn) =>
     fn.signature.toLowerCase().includes(query.toLowerCase()),

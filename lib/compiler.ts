@@ -35,10 +35,25 @@ function pickFunctions(
 
 function buildSelectedAbi(rawAbiJson: string, signatures: Set<string>): unknown[] {
   const abi = JSON.parse(rawAbiJson) as Array<Record<string, unknown>>;
+  const canonicalType = (input: { type?: string; components?: unknown[] }): string => {
+    const type = String(input.type ?? "");
+    const arrayMatch = type.match(/(.*?)(\[[^\]]*\])*$/);
+    const base = arrayMatch?.[1] ?? type;
+    const suffix = type.slice(base.length);
+    if (base !== "tuple") return type;
+    const components = Array.isArray(input.components)
+      ? input.components.map((component) =>
+          canonicalType(component as { type?: string; components?: unknown[] }),
+        )
+      : [];
+    return `(${components.join(",")})${suffix}`;
+  };
   return abi.filter((entry) => {
     if (entry.type !== "function" || typeof entry.name !== "string") return false;
     const inputs = Array.isArray(entry.inputs)
-      ? entry.inputs.map((input) => String((input as { type?: string }).type ?? ""))
+      ? entry.inputs.map((input) =>
+          canonicalType(input as { type?: string; components?: unknown[] }),
+        )
       : [];
     const signature = `${entry.name}(${inputs.join(",")})`;
     return signatures.has(signature);
@@ -89,7 +104,7 @@ function decodeType(param,data,offsetBytes){const arr=parseArray(param.type);if(
 if(param.type.startsWith("tuple")){const comps=param.components||[];if(comps.some(c=>isDynamic(c))){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));return decodeTuple(comps,data,loc);}return decodeTuple(comps,data,offsetBytes);}const word=readWord(data,offsetBytes);if(param.type==="address") return "0x"+word.slice(24);
 if(param.type==="bool") return hexToBigInt(word)!==0n;
 if(/^uint(\\d+)?$/.test(param.type)) return hexToBigInt(word).toString();
-if(/^int(\\d+)?$/.test(param.type)){let value=hexToBigInt(word);const limit=1n<<255n;if(value>=limit){value=value-(1n<<256n);}return value.toString();}
+if(/^int(\\d+)?$/.test(param.type)){const widthMatch=param.type.match(/^int(\\d+)?$/);const bits=BigInt(widthMatch&&widthMatch[1]?widthMatch[1]:"256");const mask=(1n<<bits)-1n;let value=hexToBigInt(word)&mask;const signBit=1n<<(bits-1n);if(value>=signBit){value=value-(1n<<bits);}return value.toString();}
 if(param.type==="bytes"){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));const len=Number(hexToBigInt(readWord(data,loc)));const start=(loc+32)*2;return "0x"+data.slice(start,start+len*2);} 
 if(param.type==="string"){const loc=Number(hexToBigInt(readWord(data,offsetBytes)));const len=Number(hexToBigInt(readWord(data,loc)));const start=(loc+32)*2;const hex=data.slice(start,start+len*2);const arrBytes=new Uint8Array(hex.match(/.{1,2}/g)?.map(b=>parseInt(b,16))||[]);return new TextDecoder().decode(arrBytes);} 
 if(/^bytes([1-9]|[12]\\d|3[0-2])$/.test(param.type)){const size=Number(param.type.replace("bytes",""));return "0x"+word.slice(0,size*2);}return "0x"+word;}
@@ -99,7 +114,7 @@ async function ensureChain(provider,chainId){const current=await provider.reques
 function mountRoot(selectorValue){const root=document.querySelector(selectorValue)||document.body;return root;}
 function inputForParam(param,defaultValue){const wrap=document.createElement("div");wrap.className="tx-field";const label=document.createElement("label");label.textContent=param.label||param.name||param.type;const input=document.createElement("input");input.value=defaultValue||"";input.placeholder=param.type;input.dataset.paramType=param.type;input.className="tx-input";wrap.appendChild(label);wrap.appendChild(input);return {wrap,input};}
 function injectStyles(){if(document.getElementById("tx-client-style")) return;const style=document.createElement("style");style.id="tx-client-style";style.textContent='.tx-shell{font-family:Inter,system-ui,sans-serif;background:#070b14;color:#e6ecff;padding:16px;border-radius:16px;border:1px solid #1f2b44}.tx-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.tx-card{background:#0d1423;border:1px solid #203050;padding:12px;margin-top:12px;border-radius:12px}.tx-field{display:flex;flex-direction:column;gap:4px;margin:8px 0}.tx-input, .tx-button, .tx-select{background:#0a1020;color:#f4f7ff;border:1px solid #2a3b63;padding:8px;border-radius:8px}.tx-button{cursor:pointer}.tx-status{white-space:pre-wrap;background:#04070f;border:1px solid #19253f;padding:10px;border-radius:8px;margin-top:10px;}';document.head.appendChild(style);}
-function parseValueForType(type,input){const arr=parseArray(type);if(arr){try{return JSON.parse(input);}catch{return [];}}if(/^u?int(\\d+)?$/.test(type)) return input||"0";if(type==="bool") return input==="true"||input==="1";if(type==="address") return input; if(type==="bytes"||/^bytes([1-9]|[12]\\d|3[0-2])$/.test(type)) return input||"0x";if(type.startsWith("(")||type==="tuple"){try{return JSON.parse(input);}catch{return [];}} return input;}
+function parseValueForType(type,input){const arr=parseArray(type);if(arr){try{return JSON.parse(input);}catch{throw new Error("Array input for "+type+" must be valid JSON");}}if(type.startsWith("(")||type==="tuple"){try{return JSON.parse(input);}catch{throw new Error("Tuple input for "+type+" must be valid JSON");}}if(/^u?int(\\d+)?$/.test(type)) return input||"0";if(type==="bool") return input==="true"||input==="1";if(type==="address") return input; if(type==="bytes"||/^bytes([1-9]|[12]\\d|3[0-2])$/.test(type)) return input||"0x"; return input;}
 
 function buildClient(payload){const state={provider:null,account:null,lastStepSucceeded:null,stepResults:[]};
 const api={

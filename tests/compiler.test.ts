@@ -267,3 +267,155 @@ test("Generated runtime encodes tuple object arguments for write calls", async (
   assert.ok(data.includes("0000000000000000000000000000000000000000000000000000000000000007"));
   assert.ok(data.includes("0000000000000000000000000000000000000003"));
 });
+
+test("Workflow runtime respects abort vs continueNext fallback", async () => {
+  const project = structuredClone(sampleProject);
+  project.rawAbiJson = JSON.stringify(
+    [
+      {
+        type: "function",
+        name: "ping",
+        stateMutability: "view",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256" }],
+      },
+      {
+        type: "function",
+        name: "bump",
+        stateMutability: "nonpayable",
+        inputs: [],
+        outputs: [],
+      },
+    ],
+    null,
+    2,
+  );
+  project.selectedFunctions = [
+    { signature: "ping()", order: 0, customLabel: "ping", description: "", arguments: {} },
+    { signature: "bump()", order: 1, customLabel: "bump", description: "", arguments: {} },
+  ];
+  project.workflows = [
+    {
+      name: "abort-flow",
+      steps: [
+        {
+          id: "a1",
+          signature: "ping()",
+          mode: "manual",
+          condition: "always",
+          retryAttempts: 0,
+          backoffMs: 0,
+          fallback: "abort",
+          requiredArguments: [],
+        },
+        {
+          id: "a2",
+          signature: "bump()",
+          mode: "manual",
+          condition: "always",
+          retryAttempts: 0,
+          backoffMs: 0,
+          fallback: "abort",
+          requiredArguments: [],
+        },
+      ],
+    },
+    {
+      name: "continue-flow",
+      steps: [
+        {
+          id: "c1",
+          signature: "ping()",
+          mode: "manual",
+          condition: "always",
+          retryAttempts: 0,
+          backoffMs: 0,
+          fallback: "continueNext",
+          requiredArguments: [],
+        },
+        {
+          id: "c2",
+          signature: "bump()",
+          mode: "manual",
+          condition: "always",
+          retryAttempts: 0,
+          backoffMs: 0,
+          fallback: "abort",
+          requiredArguments: [],
+        },
+      ],
+    },
+  ];
+
+  const compiled = compileProjectDetailed(project);
+  const calls: Array<{ method: string; params?: unknown[] }> = [];
+  const provider = {
+    async request({
+      method,
+      params,
+    }: {
+      method: string;
+      params?: unknown[];
+    }): Promise<unknown> {
+      calls.push({ method, params });
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_requestAccounts")
+        return ["0x0000000000000000000000000000000000000001"];
+      if (method === "eth_call") throw new Error("forced ping failure");
+      if (method === "eth_sendTransaction") return "0xhash";
+      if (method === "eth_getTransactionReceipt")
+        return { status: "0x1", transactionHash: "0xhash" };
+      throw new Error(`Unexpected method ${method}`);
+    },
+  };
+
+  const makeElement = () => ({
+    className: "",
+    textContent: "",
+    value: "",
+    placeholder: "",
+    dataset: {} as Record<string, string>,
+    appendChild() {},
+    set onclick(_handler: unknown) {},
+  });
+  const root = { innerHTML: "", appendChild() {} };
+  const context: Record<string, unknown> = {
+    window: { ethereum: provider, EndTxClient: undefined },
+    document: {
+      querySelector: () => root,
+      body: root,
+      head: root,
+      getElementById: () => null,
+      createElement: () => makeElement(),
+    },
+    TextEncoder,
+    TextDecoder,
+    fetch: async () => {
+      throw new Error("fetch should not be used when provider exists");
+    },
+    setTimeout: (fn: () => void) => {
+      fn();
+      return 0;
+    },
+    clearTimeout: () => {},
+  };
+  vm.runInNewContext(compiled.script, context);
+  const client = (
+    context.window as {
+      EndTxClient?: {
+        client?: { executeWorkflow: (name: string, args: Record<string, unknown>) => Promise<unknown> };
+      };
+    }
+  ).EndTxClient?.client;
+  assert.ok(client);
+
+  calls.length = 0;
+  await client!.executeWorkflow("abort-flow", {});
+  const abortSends = calls.filter((call) => call.method === "eth_sendTransaction").length;
+  assert.equal(abortSends, 0);
+
+  calls.length = 0;
+  await client!.executeWorkflow("continue-flow", {});
+  const continueSends = calls.filter((call) => call.method === "eth_sendTransaction").length;
+  assert.equal(continueSends, 1);
+});

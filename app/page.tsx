@@ -139,7 +139,7 @@ export default function Home() {
     a.href = url;
     a.download = "script.js";
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const updateWorkflowStep = (

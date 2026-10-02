@@ -1,4 +1,7 @@
 {
+  "name": "the-end-control-plane",
+  "version": "0.1.0",
+  "private": true,
   "name": "the-end",
   "version": "0.1.0",
   "private": true,
@@ -9,6 +12,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "lint": "eslint .",
+    "test": "node --import tsx --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "js-sha3": "^0.13.0",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "^4.1.11"
     "lint": "eslint",
     "test": "vitest run"
   },
@@ -28,6 +40,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "tailwindcss": "^4",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
     "@vitest/ui": "^3.2.6",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",

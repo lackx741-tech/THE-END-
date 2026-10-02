@@ -1,117 +1,131 @@
-# THE-END-
+# THE-END Control Plane
 
-THE-END- is a private operator dashboard that compiles contract configuration into a standalone public `script.js` artifact. The dashboard is **not** user-facing. End users only receive the generated runtime, which renders inline controls, collects arguments, builds EIP-712 payloads locally, asks the wallet to sign with `eth_signTypedData_v4`, and sends signed payloads to backend `/sign` and `/execute` endpoints.
+Operational private control plane for compiling selected smart-contract ABI functions, transaction strategies, and UI/runtime configuration into a standalone browser JavaScript payload: `script.js`.
 
-## Architecture
+## Product boundary
 
-### Part 1 — private operator control plane
-Built with Next.js + Tailwind and lightweight local shadcn-style UI primitives.
+- **Private dashboard (this repo runtime):** operator-facing config, validation, workflow setup, compilation, preview/export.
+- **Public generated client (`script.js`):** standalone browser payload that runs through an end user's EIP-1193 wallet (`window.ethereum`).
 
-Capabilities in this initial vertical slice:
-- create/load a project configuration JSON
-- paste or upload ABI JSON
-- parse ABI and classify read/write/payable functions
-- preserve overloads, tuples, and arrays
-- select public functions, reorder them, and customize labels/defaults
-- define backend endpoint URLs
-- edit workflow JSON with retry, fallback, and previous-step bindings
-- compile deterministic standalone `script.js`
-- preview and download generated output
+The generated script does **not** require access to this dashboard at runtime.
 
-### Part 2 — generated public runtime
-The compiler emits a single self-contained JavaScript file that:
-- contains selected ABI function metadata
-- renders inline buttons/forms for selected functions
-- builds EIP-712 typed data locally in the browser
-- calls `window.ethereum.request({ method: 'eth_signTypedData_v4', ... })`
-- POSTs signatures and typed payloads to `/sign`
-- POSTs execution payloads to `/execute`
-- displays results and errors inline
-- runs configured sequential workflows with retry/fallback behavior
-- avoids `import` / `require` statements
+## Features in this vertical slice
+
+- Strict project schema validation with Zod.
+- ABI parsing and normalization:
+  - read/write/payable classification
+  - overload disambiguation by canonical signatures
+  - tuple/array recursive modeling
+  - selector metadata hinting
+  - malformed ABI errors
+- Function selection + ordering + label/description editing.
+- Workflow model with ordered steps:
+  - `always`, `previousStepSucceeded`, `previousStepFailed`
+  - retries + deterministic backoff
+  - fallback `abort` / `continueNext`
+  - selected-function + required-argument validation
+- Deterministic compiler API:
+  - `compileProject(config): string`
+  - stable serialization
+  - stable output hash
+  - compile diagnostics (errors/warnings)
+  - embedded manifest and runtime/compiler versions
+- Standalone generated `script.js`:
+  - no `import`/`require`
+  - shadow-DOM runtime shell
+  - canonical compiled modal design (`ui.modalDesign`)
+  - EIP-1193 wallet connect + chain switch attempt
+  - provider chooser with injected / WalletConnect v2 / Reown AppKit modes
+  - `eth_call` read execution
+  - transaction submit for write/payable (`eth_sendTransaction`)
+  - tx hash + receipt polling
+  - generated runtime UI (wallet modal + function cards + workflow controls + status)
+  - workflow execution method (best-effort, non-atomic)
+- Local browser persistence + sample ERC-20-like starter project.
 
 ## Security boundary
 
-- **Dashboard:** private operator tooling only
-- **Generated script:** public runtime only
-- **Backend:** verifies EIP-712 signatures and executes/relays transactions
-
-This repository does **not** implement backend signing or execution. It only generates the client artifact expected to call:
-
-- `POST /sign`
-- `POST /execute`
-- optional `GET /config/:projectId`
-
-No private keys or client-side signing libraries are added. The browser runtime only uses `window.ethereum.request()` for EIP-712 signing.
+- No private-key custody.
+- No backend signer.
+- No secrets are embedded by design in generated script.
+- Runtime signing is performed by user wallet via EIP-1193.
 
 ## Local setup
 
-Use Node.js 20.9.0 or newer.
-
 ```bash
 npm install
-THE_END_ENABLE_OPERATOR_DASHBOARD=true npm run dev
+npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open: `http://localhost:3000`
 
-The operator dashboard route stays disabled unless `THE_END_ENABLE_OPERATOR_DASHBOARD` is explicitly set, which keeps the control plane behind a deployment-time private boundary by default.
-
-## Commands
+## Test and quality commands
 
 ```bash
-npm test
 npm run lint
+npm run test
 npm run build
 ```
 
-## Generated runtime contract with the backend
+## Manual smoke path
 
-### `/sign`
-The generated runtime posts:
+1. Start dev server: `npm run dev`
+2. Open dashboard (sample project is preloaded).
+3. Go to **Contract/ABI** and click **Parse / Validate ABI**.
+4. Go to **Functions**, select at least one read function and one write/payable function.
+5. Go to **Workflows**, verify step signatures/conditions/retry/fallback settings.
+6. Go to **Compile/Export**, click **Compile Project**.
+7. Confirm diagnostics are clean and hash is shown.
+8. Click **Download script.js**.
+9. Use in plain HTML:
 
-```json
-{
-  "signature": "0x...",
-  "account": "0x...",
-  "typedData": { "domain": {}, "types": {}, "primaryType": "...", "message": {} },
-  "functionName": "transfer",
-  "functionSignature": "transfer(address,uint256)",
-  "args": { "recipient": "0x...", "amount": "100" }
-}
+```html
+<div id="app"></div>
+<script src="script.js"></script>
 ```
 
-### `/execute`
-The generated runtime posts either `signResult.executePayload` from the backend response or a fallback payload containing the signature, typed data, function metadata, args, and `/sign` response.
+## Compiler API
 
-## EIP-712 payload shape
+- `compileProject(config): string`
+- `compileProjectDetailed(config): { script, hash, manifest, diagnostics }`
 
-For each selected function the compiler generates:
-- `domain` from dashboard config
-- unique `primaryType` per function signature (including overload-safe differentiation)
-- `types.EIP712Domain`
-- `types[primaryType]` with `projectName`, `functionSignature`, and ABI-derived inputs
-- nested typed-data structs for tuple parameters
+Located in: `/lib/compiler.ts`
 
-## Example project
+## Generated payload format (high level)
 
-A bundled ERC-20 sample is included and loads by default. It demonstrates:
-- read + write functions
-- overload handling
-- arrays and tuples
-- workflow configuration with retry/fallback
+`script.js` contains:
 
-## Tests included
+- embedded manifest + normalized config subset
+- embedded `window.__PROJECT_CONFIG__` runtime config
+- selected ABI subset
+- runtime codec/helpers
+- wallet and execution engine
+- modal renderer consuming compiled design schema
+- workflow runner (`bestEffort: true` result semantics)
 
-- ABI parser tests
-- EIP-712 type generation tests
-- configuration validation tests
-- deterministic compilation tests
-- generated script structure validation
+## Modal Studio (Forge-native)
 
-## Known limitations / future work
+- Canonical `modal.design` schema with backward-compatible defaults.
+- Layouts: `list`, `grid`, `compact`, `securePanel`.
+- Theme/typography/density/dimensions/radius/backdrop-blur/scoped colors.
+- Copy fields: eyebrow, title, description, safety copy, search, empty/help text.
+- Controls: trigger mode (`button`/`selector`/`programmatic`) and selector targeting.
+- Provider options and ordering for:
+  - `injected`
+  - `walletconnectV2`
+  - `reownAppKit`
+- Sandboxed preview in dashboard uses the exact generated script runtime.
 
-- workflow editing is JSON-first in this vertical slice rather than a full visual builder
-- generated runtime assumes backend responses are JSON
-- tuple/array inputs in the runtime are entered as JSON text
-- backend response semantics beyond `/sign` and `/execute` payload shape remain operator-defined
+### WalletConnect v2 / Reown AppKit integration notes
+
+- Generated runtime contains hooks for WalletConnect v2 and Reown AppKit provider modes.
+- Runtime expects host page integrations on `window` (`window.WalletConnectProvider`, `window.ReownAppKit` or `window.reown`) when those modes are selected.
+- The compiled script remains standalone (no import/require), so host pages can choose how to load those SDKs.
+
+## Known limitations (explicit)
+
+- Runtime ABI codec covers common Solidity types used in this slice (address, bool, int/uint, bytes/string, arrays, tuples) but is not a full replacement for mature audited ABI libraries.
+- Function selectors are computed at compile time using Keccak-256 and embedded in the generated payload.
+- Workflow execution is best-effort sequential and can partially complete; there is no cross-transaction atomicity.
+- No backend multi-project storage/auth yet (local browser persistence only in this slice).
+- WalletConnect/Reown modes require their browser SDK globals to be present on the host page.

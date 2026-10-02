@@ -8,6 +8,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --font-sans: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
   --font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
 }
@@ -16,6 +18,11 @@
   box-sizing: border-box;
 }
 
+body {
+  margin: 0;
+  background: radial-gradient(circle at 0 0, #0f172a 0%, #020617 40%, #020617 100%);
+  color: var(--foreground);
+  font-family: var(--font-sans);
 html {
   min-height: 100%;
   background:

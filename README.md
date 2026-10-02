@@ -32,11 +32,14 @@ The generated script does **not** require access to this dashboard at runtime.
   - embedded manifest and runtime/compiler versions
 - Standalone generated `script.js`:
   - no `import`/`require`
+  - shadow-DOM runtime shell
+  - canonical compiled modal design (`ui.modalDesign`)
   - EIP-1193 wallet connect + chain switch attempt
+  - provider chooser with injected / WalletConnect v2 / Reown AppKit modes
   - `eth_call` read execution
   - transaction submit for write/payable (`eth_sendTransaction`)
   - tx hash + receipt polling
-  - generated minimal UI (wallet button + per-function cards + status)
+  - generated runtime UI (wallet modal + function cards + workflow controls + status)
   - workflow execution method (best-effort, non-atomic)
 - Local browser persistence + sample ERC-20-like starter project.
 
@@ -93,11 +96,31 @@ Located in: `/lib/compiler.ts`
 `script.js` contains:
 
 - embedded manifest + normalized config subset
+- embedded `window.__PROJECT_CONFIG__` runtime config
 - selected ABI subset
 - runtime codec/helpers
 - wallet and execution engine
-- minimal generated UI renderer
+- modal renderer consuming compiled design schema
 - workflow runner (`bestEffort: true` result semantics)
+
+## Modal Studio (Forge-native)
+
+- Canonical `modal.design` schema with backward-compatible defaults.
+- Layouts: `list`, `grid`, `compact`, `securePanel`.
+- Theme/typography/density/dimensions/radius/backdrop-blur/scoped colors.
+- Copy fields: eyebrow, title, description, safety copy, search, empty/help text.
+- Controls: trigger mode (`button`/`selector`/`programmatic`) and selector targeting.
+- Provider options and ordering for:
+  - `injected`
+  - `walletconnectV2`
+  - `reownAppKit`
+- Sandboxed preview in dashboard uses the exact generated script runtime.
+
+### WalletConnect v2 / Reown AppKit integration notes
+
+- Generated runtime contains hooks for WalletConnect v2 and Reown AppKit provider modes.
+- Runtime expects host page integrations on `window` (`window.WalletConnectProvider`, `window.ReownAppKit` or `window.reown`) when those modes are selected.
+- The compiled script remains standalone (no import/require), so host pages can choose how to load those SDKs.
 
 ## Known limitations (explicit)
 
@@ -105,3 +128,4 @@ Located in: `/lib/compiler.ts`
 - Function selectors are computed at compile time using Keccak-256 and embedded in the generated payload.
 - Workflow execution is best-effort sequential and can partially complete; there is no cross-transaction atomicity.
 - No backend multi-project storage/auth yet (local browser persistence only in this slice).
+- WalletConnect/Reown modes require their browser SDK globals to be present on the host page.

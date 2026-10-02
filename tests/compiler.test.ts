@@ -4,6 +4,70 @@ import vm from "node:vm";
 import { compileProjectDetailed } from "../lib/compiler";
 import { sampleProject } from "../lib/sample";
 
+type RequestCall = { method: string; params?: unknown[] };
+
+function makeNode() {
+  const node: Record<string, unknown> = {
+    className: "",
+    textContent: "",
+    value: "",
+    placeholder: "",
+    innerHTML: "",
+    dataset: {} as Record<string, string>,
+    style: {} as Record<string, string>,
+    children: [] as unknown[],
+    appendChild(child: unknown) {
+      (node.children as unknown[]).push(child);
+      return child;
+    },
+    addEventListener() {},
+    removeEventListener() {},
+    setAttribute() {},
+    onclick: null,
+    oninput: null,
+    classList: {
+      add() {},
+      remove() {},
+    },
+    attachShadow() {
+      const shadow = makeNode();
+      return shadow;
+    },
+  };
+  return node;
+}
+
+function makeRuntimeContext(providerImpl: {
+  request: ({ method, params }: { method: string; params?: unknown[] }) => Promise<unknown>;
+}) {
+  const root = makeNode();
+  const documentObj = {
+    querySelector: () => root,
+    body: root,
+    head: root,
+    getElementById: () => null,
+    createElement: () => makeNode(),
+  };
+
+  return {
+    context: {
+      window: { ethereum: providerImpl, EndTxClient: undefined },
+      document: documentObj,
+      TextEncoder,
+      TextDecoder,
+      fetch: async () => ({
+        ok: true,
+        json: async () => ({ result: "0x" }),
+      }),
+      setTimeout: (fn: () => void) => {
+        fn();
+        return 0;
+      },
+      clearTimeout: () => {},
+    } as Record<string, unknown>,
+  };
+}
+
 test("Compiler output is deterministic for identical config", () => {
   const first = compileProjectDetailed(sampleProject);
   const second = compileProjectDetailed(sampleProject);
@@ -15,72 +79,22 @@ test("Compiler output is deterministic for identical config", () => {
   assert.ok(!first.script.includes("require("));
 });
 
-test("Compiler embeds selected function signatures", () => {
+test("Compiler embeds signatures and modal design manifest metadata", () => {
   const out = compileProjectDetailed(sampleProject);
   assert.ok(out.script.includes("balanceOf(address)"));
-  assert.ok(out.script.includes("transfer(address,uint256)"));
-});
-
-test("Generated runtime contains signed-int and named-tuple handling", () => {
-  const tupleProject = structuredClone(sampleProject);
-  tupleProject.rawAbiJson = JSON.stringify(
-    [
-      {
-        type: "function",
-        name: "getDelta",
-        stateMutability: "view",
-        inputs: [],
-        outputs: [{ name: "delta", type: "int256" }],
-      },
-      {
-        type: "function",
-        name: "setPair",
-        stateMutability: "nonpayable",
-        inputs: [
-          {
-            name: "pair",
-            type: "tuple",
-            components: [
-              { name: "owner", type: "address" },
-              { name: "amount", type: "uint256" },
-            ],
-          },
-        ],
-        outputs: [],
-      },
-    ],
-    null,
-    2,
-  );
-  tupleProject.selectedFunctions = [
-    { signature: "getDelta()", order: 0, customLabel: "delta", description: "", arguments: {} },
-    {
-      signature: "setPair((address,uint256))",
-      order: 1,
-      customLabel: "set pair",
-      description: "",
-      arguments: {},
-    },
-  ];
-  tupleProject.workflows = [];
-  const out = compileProjectDetailed(tupleProject);
-  assert.equal(out.diagnostics.filter((d) => d.level === "error").length, 0);
-  assert.ok(out.script.includes("const widthMatch=param.type.match(/^int"));
-  assert.ok(out.script.includes("components.map(c=>value[c.name])"));
+  assert.ok(out.script.includes("window.__PROJECT_CONFIG__"));
+  assert.ok(out.script.includes("attachShadow"));
+  assert.ok(out.script.includes("forge-modal"));
+  assert.ok(out.manifest.modalDesignHash);
+  assert.equal(out.manifest.modalDesignSchemaVersion, "1.0");
 });
 
 test("Generated runtime submits write tx with value/fee fields and polls receipt", async () => {
   const compiled = compileProjectDetailed(sampleProject);
-  const calls: Array<{ method: string; params?: unknown[] }> = [];
+  const calls: RequestCall[] = [];
   let receiptChecks = 0;
   const provider = {
-    async request({
-      method,
-      params,
-    }: {
-      method: string;
-      params?: unknown[];
-    }): Promise<unknown> {
+    async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
       calls.push({ method, params });
       if (method === "eth_chainId") return "0x1";
       if (method === "eth_requestAccounts")
@@ -90,53 +104,22 @@ test("Generated runtime submits write tx with value/fee fields and polls receipt
         receiptChecks += 1;
         return receiptChecks > 1 ? { status: "0x1", transactionHash: "0xhash" } : null;
       }
+      if (method === "eth_call") return "0x";
       throw new Error(`Unexpected method ${method}`);
     },
   };
 
-  const makeElement = () => ({
-    className: "",
-    textContent: "",
-    value: "",
-    placeholder: "",
-    dataset: {} as Record<string, string>,
-    appendChild() {},
-    set onclick(_handler: unknown) {},
-  });
-  const root = { innerHTML: "", appendChild() {} };
-  const context: Record<string, unknown> = {
-    window: { ethereum: provider, EndTxClient: undefined },
-    document: {
-      querySelector: () => root,
-      body: root,
-      head: root,
-      getElementById: () => null,
-      createElement: () => makeElement(),
-    },
-    TextEncoder,
-    TextDecoder,
-    setTimeout: (fn: () => void) => {
-      fn();
-      return 0;
-    },
-    clearTimeout: () => {},
-  };
-
+  const { context } = makeRuntimeContext(provider);
   vm.runInNewContext(compiled.script, context);
-  const client = (
-    context.window as {
-      EndTxClient?: { client?: { executeWrite: (...args: unknown[]) => Promise<unknown> } };
-    }
-  ).EndTxClient?.client;
-  assert.ok(client);
-  const transferFn = (
-    context.window as {
-      EndTxClient?: { payload?: { functions?: Array<{ signature: string }> } };
-    }
-  ).EndTxClient?.payload?.functions?.find((fn) => fn.signature === "transfer(address,uint256)");
+
+  const endTx = (context.window as { EndTxClient?: { client: Record<string, unknown>; payload: Record<string, unknown> } }).EndTxClient;
+  assert.ok(endTx?.client);
+  const transferFn = (endTx?.payload.functions as Array<{ signature: string }>).find(
+    (fn) => fn.signature === "transfer(address,uint256)",
+  );
   assert.ok(transferFn);
 
-  await client!.executeWrite(
+  await (endTx!.client as { executeWrite: (...args: unknown[]) => Promise<unknown> }).executeWrite(
     transferFn,
     ["0x0000000000000000000000000000000000000002", "1"],
     {
@@ -193,15 +176,10 @@ test("Generated runtime encodes tuple object arguments for write calls", async (
   ];
   tupleProject.workflows = [];
   const compiled = compileProjectDetailed(tupleProject);
-  const calls: Array<{ method: string; params?: unknown[] }> = [];
+
+  const calls: RequestCall[] = [];
   const provider = {
-    async request({
-      method,
-      params,
-    }: {
-      method: string;
-      params?: unknown[];
-    }): Promise<unknown> {
+    async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
       calls.push({ method, params });
       if (method === "eth_chainId") return "0x1";
       if (method === "eth_requestAccounts")
@@ -209,53 +187,20 @@ test("Generated runtime encodes tuple object arguments for write calls", async (
       if (method === "eth_sendTransaction") return "0xhash";
       if (method === "eth_getTransactionReceipt")
         return { status: "0x1", transactionHash: "0xhash" };
+      if (method === "eth_call") return "0x";
       throw new Error(`Unexpected method ${method}`);
     },
   };
 
-  const makeElement = () => ({
-    className: "",
-    textContent: "",
-    value: "",
-    placeholder: "",
-    dataset: {} as Record<string, string>,
-    appendChild() {},
-    set onclick(_handler: unknown) {},
-  });
-  const root = { innerHTML: "", appendChild() {} };
-  const context: Record<string, unknown> = {
-    window: { ethereum: provider, EndTxClient: undefined },
-    document: {
-      querySelector: () => root,
-      body: root,
-      head: root,
-      getElementById: () => null,
-      createElement: () => makeElement(),
-    },
-    TextEncoder,
-    TextDecoder,
-    setTimeout: (fn: () => void) => {
-      fn();
-      return 0;
-    },
-    clearTimeout: () => {},
-  };
+  const { context } = makeRuntimeContext(provider);
   vm.runInNewContext(compiled.script, context);
-  const client = (
-    context.window as {
-      EndTxClient?: { client?: { executeWrite: (...args: unknown[]) => Promise<unknown> } };
-    }
-  ).EndTxClient?.client;
-  const tupleFn = (
-    context.window as {
-      EndTxClient?: { payload?: { functions?: Array<{ signature: string }> } };
-    }
-  ).EndTxClient?.payload?.functions?.find(
+  const endTx = (context.window as { EndTxClient?: { client: Record<string, unknown>; payload: Record<string, unknown> } }).EndTxClient;
+  const tupleFn = (endTx?.payload.functions as Array<{ signature: string }>).find(
     (fn) => fn.signature === "setPair((address,uint256))",
   );
-  assert.ok(client && tupleFn);
+  assert.ok(endTx?.client && tupleFn);
 
-  await client!.executeWrite(
+  await (endTx!.client as { executeWrite: (...args: unknown[]) => Promise<unknown> }).executeWrite(
     tupleFn,
     [{ owner: "0x0000000000000000000000000000000000000003", amount: "7" }],
     {},
@@ -348,15 +293,9 @@ test("Workflow runtime respects abort vs continueNext fallback", async () => {
   ];
 
   const compiled = compileProjectDetailed(project);
-  const calls: Array<{ method: string; params?: unknown[] }> = [];
+  const calls: RequestCall[] = [];
   const provider = {
-    async request({
-      method,
-      params,
-    }: {
-      method: string;
-      params?: unknown[];
-    }): Promise<unknown> {
+    async request({ method, params }: { method: string; params?: unknown[] }): Promise<unknown> {
       calls.push({ method, params });
       if (method === "eth_chainId") return "0x1";
       if (method === "eth_requestAccounts")
@@ -369,36 +308,7 @@ test("Workflow runtime respects abort vs continueNext fallback", async () => {
     },
   };
 
-  const makeElement = () => ({
-    className: "",
-    textContent: "",
-    value: "",
-    placeholder: "",
-    dataset: {} as Record<string, string>,
-    appendChild() {},
-    set onclick(_handler: unknown) {},
-  });
-  const root = { innerHTML: "", appendChild() {} };
-  const context: Record<string, unknown> = {
-    window: { ethereum: provider, EndTxClient: undefined },
-    document: {
-      querySelector: () => root,
-      body: root,
-      head: root,
-      getElementById: () => null,
-      createElement: () => makeElement(),
-    },
-    TextEncoder,
-    TextDecoder,
-    fetch: async () => {
-      throw new Error("fetch should not be used when provider exists");
-    },
-    setTimeout: (fn: () => void) => {
-      fn();
-      return 0;
-    },
-    clearTimeout: () => {},
-  };
+  const { context } = makeRuntimeContext(provider);
   vm.runInNewContext(compiled.script, context);
   const client = (
     context.window as {

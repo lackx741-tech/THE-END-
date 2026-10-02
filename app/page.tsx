@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseAndNormalizeAbi } from "@/lib/abi";
 import { compileProjectDetailed } from "@/lib/compiler";
+import { resolveModalDesign, getCanonicalModalDefaults } from "@/lib/modal";
 import { sampleProject } from "@/lib/sample";
-import { projectConfigSchema, type ProjectConfig } from "@/lib/schema";
+import { projectConfigSchema, type ModalDesign, type ProjectConfig } from "@/lib/schema";
 
-const STORAGE_KEY = "the-end-control-plane-v1";
+const STORAGE_KEY = "the-end-control-plane-v2";
 
 function badge(kind: string) {
   if (kind === "read") return "bg-emerald-500/20 text-emerald-200 border-emerald-500/40";
@@ -20,6 +21,7 @@ const tabs = [
   "Functions",
   "Workflows",
   "Appearance",
+  "Modal Studio",
   "Compile/Export",
 ] as const;
 
@@ -54,6 +56,11 @@ export default function Home() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   }, [config]);
 
+  const modalDesign = useMemo(
+    () => resolveModalDesign(config.ui.modalDesign),
+    [config.ui.modalDesign],
+  );
+
   const abi = useMemo(() => parseAndNormalizeAbi(config.rawAbiJson), [config.rawAbiJson]);
   const selectedSignatures = useMemo(
     () => new Set(config.selectedFunctions.map((fn) => fn.signature)),
@@ -65,11 +72,43 @@ export default function Home() {
   );
 
   const overviewCompile = compileResult?.manifest as
-    | { outputHash?: string; selectedFunctionCount?: number }
+    | { outputHash?: string; selectedFunctionCount?: number; modalDesignHash?: string }
     | undefined;
+
+  const runtimePreviewHtml = useMemo(() => {
+    if (!compileResult?.script) return "";
+    const escapedScript = compileResult.script.replace(/<\/script/gi, "<\\/script");
+    return `<!doctype html><html><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/></head><body style=\"margin:0;padding:16px;background:#020617;color:#e2e8f0\"><div id=\"app\"></div><div id=\"forge-preview\"></div><script>${escapedScript}</script></body></html>`;
+  }, [compileResult?.script]);
 
   const parseAbiNow = () => {
     setDiagnostics(abi.errors.length ? abi.errors : ["ABI parsed successfully"]);
+  };
+
+  const updateModalDesign = (patch: Partial<ModalDesign>) => {
+    setConfig((prev) => ({
+      ...prev,
+      ui: {
+        ...prev.ui,
+        modalDesign: {
+          ...resolveModalDesign(prev.ui.modalDesign),
+          ...patch,
+        },
+      },
+    }));
+  };
+
+  const updateModalNested = <K extends keyof ModalDesign>(
+    key: K,
+    patch: Partial<ModalDesign[K]> extends object ? Partial<ModalDesign[K]> : never,
+  ) => {
+    const current = resolveModalDesign(config.ui.modalDesign);
+    updateModalDesign({
+      [key]: {
+        ...(current[key] as Record<string, unknown>),
+        ...(patch as Record<string, unknown>),
+      },
+    } as Partial<ModalDesign>);
   };
 
   const toggleFunction = (signature: string) => {
@@ -131,6 +170,16 @@ export default function Home() {
     setCompileResult(result);
   };
 
+  const compileForPreview = () => {
+    const previewConfig: ProjectConfig = {
+      ...config,
+      ui: { ...config.ui, mountSelector: "#forge-preview", modalDesign },
+    };
+    const result = compileProjectDetailed(previewConfig);
+    setCompileResult(result);
+    setActiveTab("Compile/Export");
+  };
+
   const downloadScript = () => {
     if (!compileResult?.script) return;
     const blob = new Blob([compileResult.script], { type: "application/javascript" });
@@ -166,8 +215,8 @@ export default function Home() {
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto grid min-h-screen max-w-7xl grid-cols-1 lg:grid-cols-[260px_1fr]">
         <aside className="border-r border-slate-800 bg-slate-900/70 p-4">
-          <h1 className="text-xl font-semibold tracking-tight">THE-END Control Plane</h1>
-          <p className="mt-1 text-sm text-slate-400">Private dashboard → deterministic script.js compiler</p>
+          <h1 className="text-xl font-semibold tracking-tight">THE-END Forge</h1>
+          <p className="mt-1 text-sm text-slate-400">Private control plane → deterministic script.js</p>
           <nav className="mt-5 space-y-2">
             {tabs.map((tab) => (
               <button
@@ -201,11 +250,23 @@ export default function Home() {
           </header>
 
           {activeTab === "Overview" && (
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <Card title="Project Status" value="Local persisted" />
-              <Card title="Contract" value={config.contractAddress} />
-              <Card title="Chain" value={`${config.chainId}`} />
-              <Card title="Compile" value={overviewCompile?.outputHash ?? "Pending"} />
+            <section className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Card title="Project Status" value="Local persisted" />
+                <Card title="Contract" value={config.contractAddress} />
+                <Card title="Chain" value={`${config.chainId}`} />
+                <Card title="Modal Hash" value={overviewCompile?.modalDesignHash ?? "Pending"} />
+              </div>
+              <Panel>
+                <h3 className="text-sm font-medium">Wizard entry points</h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="rounded-lg border border-slate-700 px-3 py-2 text-xs" onClick={() => setActiveTab("Contract/ABI")}>1. Contract Setup</button>
+                  <button className="rounded-lg border border-slate-700 px-3 py-2 text-xs" onClick={() => setActiveTab("Functions")}>2. Function Selection</button>
+                  <button className="rounded-lg border border-slate-700 px-3 py-2 text-xs" onClick={() => setActiveTab("Modal Studio")}>3. Modal Studio</button>
+                  <button className="rounded-lg border border-slate-700 px-3 py-2 text-xs" onClick={() => setActiveTab("Workflows")}>4. Workflow Builder</button>
+                  <button className="rounded-lg border border-indigo-500 bg-indigo-500/20 px-3 py-2 text-xs" onClick={() => setActiveTab("Compile/Export")}>Execution Studio</button>
+                </div>
+              </Panel>
             </section>
           )}
 
@@ -359,51 +420,26 @@ export default function Home() {
                       >
                         <div className="font-mono text-xs text-slate-400">{step.id}</div>
                         <div className="mt-1 grid gap-2 md:grid-cols-2">
-                          <label
-                            className="text-xs text-slate-300"
-                            htmlFor={`${workflow.name}-${step.id}-signature`}
-                          >
+                          <label className="text-xs text-slate-300" htmlFor={`${workflow.name}-${step.id}-signature`}>
                             Signature
-                            {(() => {
-                              const signatures = config.selectedFunctions.map((fn) => fn.signature);
-                              const hasCurrent = signatures.includes(step.signature);
-                              const selectValue = hasCurrent
-                                ? step.signature
-                                : signatures.length === 0
-                                  ? "__none"
-                                  : "__missing";
-                              return (
                             <select
                               id={`${workflow.name}-${step.id}-signature`}
                               className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-2"
-                              value={selectValue}
+                              value={step.signature}
                               onChange={(event) =>
-                                event.target.value !== "__none" &&
-                                event.target.value !== "__missing" &&
                                 updateWorkflowStep(workflow.name, step.id, {
                                   signature: event.target.value,
                                 })
                               }
                             >
-                              {signatures.length === 0 && (
-                                <option value="__none">No selected functions available</option>
-                              )}
-                              {!hasCurrent && signatures.length > 0 && (
-                                <option value="__missing">Missing: {step.signature}</option>
-                              )}
                               {config.selectedFunctions.map((fn) => (
                                 <option key={fn.signature} value={fn.signature}>
                                   {fn.signature}
                                 </option>
                               ))}
                             </select>
-                              );
-                            })()}
                           </label>
-                          <label
-                            className="text-xs text-slate-300"
-                            htmlFor={`${workflow.name}-${step.id}-condition`}
-                          >
+                          <label className="text-xs text-slate-300" htmlFor={`${workflow.name}-${step.id}-condition`}>
                             Condition
                             <select
                               id={`${workflow.name}-${step.id}-condition`}
@@ -442,10 +478,7 @@ export default function Home() {
                             }
                             type="number"
                           />
-                          <label
-                            className="text-xs text-slate-300"
-                            htmlFor={`${workflow.name}-${step.id}-fallback`}
-                          >
+                          <label className="text-xs text-slate-300" htmlFor={`${workflow.name}-${step.id}-fallback`}>
                             Fallback
                             <select
                               id={`${workflow.name}-${step.id}-fallback`}
@@ -519,6 +552,101 @@ export default function Home() {
             </section>
           )}
 
+          {activeTab === "Modal Studio" && (
+            <section className="space-y-4">
+              <Panel>
+                <h3 className="text-sm font-medium">Layout & Theme</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <label className="text-xs text-slate-300">Layout
+                    <select className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" value={modalDesign.layout} onChange={(e) => updateModalDesign({ layout: e.target.value as ModalDesign["layout"] })}>
+                      <option value="list">list</option>
+                      <option value="grid">grid</option>
+                      <option value="compact">compact</option>
+                      <option value="securePanel">securePanel</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">Theme
+                    <select className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" value={modalDesign.theme} onChange={(e) => updateModalDesign({ theme: e.target.value as ModalDesign["theme"] })}>
+                      <option value="dark">dark</option>
+                      <option value="light">light</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">Typography
+                    <select className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" value={modalDesign.typography} onChange={(e) => updateModalDesign({ typography: e.target.value as ModalDesign["typography"] })}>
+                      <option value="modern">modern</option>
+                      <option value="system">system</option>
+                      <option value="mono">mono</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">Density
+                    <select className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" value={modalDesign.density} onChange={(e) => updateModalDesign({ density: e.target.value as ModalDesign["density"] })}>
+                      <option value="comfortable">comfortable</option>
+                      <option value="compact">compact</option>
+                    </select>
+                  </label>
+                  <LabeledInput label="Width" type="number" value={`${modalDesign.dimensions.width}`} onChange={(v) => updateModalNested("dimensions", { width: clampInt(v, 320, 960) })} />
+                  <LabeledInput label="Max Height" type="number" value={`${modalDesign.dimensions.maxHeight}`} onChange={(v) => updateModalNested("dimensions", { maxHeight: clampInt(v, 320, 900) })} />
+                  <LabeledInput label="Radius" type="number" value={`${modalDesign.radius}`} onChange={(v) => updateModalDesign({ radius: clampInt(v, 0, 32) })} />
+                  <LabeledInput label="Backdrop Blur" type="number" value={`${modalDesign.backdropBlur}`} onChange={(v) => updateModalDesign({ backdropBlur: clampInt(v, 0, 24) })} />
+                </div>
+              </Panel>
+
+              <Panel>
+                <h3 className="text-sm font-medium">Copy & Branding</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <LabeledInput label="Eyebrow" value={modalDesign.copy.eyebrow} onChange={(v) => updateModalNested("copy", { eyebrow: v })} />
+                  <LabeledInput label="Title" value={modalDesign.copy.title} onChange={(v) => updateModalNested("copy", { title: v })} />
+                  <LabeledInput label="Description" value={modalDesign.copy.description} onChange={(v) => updateModalNested("copy", { description: v })} />
+                  <LabeledInput label="Safety copy" value={modalDesign.copy.safetyCopy} onChange={(v) => updateModalNested("copy", { safetyCopy: v })} />
+                  <LabeledInput label="Search text" value={modalDesign.copy.searchPlaceholder} onChange={(v) => updateModalNested("copy", { searchPlaceholder: v })} />
+                  <LabeledInput label="Empty state" value={modalDesign.copy.emptyState} onChange={(v) => updateModalNested("copy", { emptyState: v })} />
+                  <LabeledInput label="Product name" value={modalDesign.branding.productName} onChange={(v) => updateModalNested("branding", { productName: v })} />
+                  <LabeledInput label="Brand subtitle" value={modalDesign.branding.subtitle} onChange={(v) => updateModalNested("branding", { subtitle: v })} />
+                </div>
+              </Panel>
+
+              <Panel>
+                <h3 className="text-sm font-medium">Providers, trigger controls, integrations</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <label className="text-xs text-slate-300">Provider mode
+                    <select className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" value={modalDesign.provider.mode} onChange={(e) => updateModalNested("provider", { mode: e.target.value as ModalDesign["provider"]["mode"] })}>
+                      <option value="auto">auto</option>
+                      <option value="injected">injected</option>
+                      <option value="walletconnectV2">walletconnectV2</option>
+                      <option value="reownAppKit">reownAppKit</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-slate-300">Trigger mode
+                    <select className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2" value={modalDesign.controls.triggerMode} onChange={(e) => updateModalNested("controls", { triggerMode: e.target.value as ModalDesign["controls"]["triggerMode"] })}>
+                      <option value="button">button</option>
+                      <option value="selector">selector</option>
+                      <option value="programmatic">programmatic</option>
+                    </select>
+                  </label>
+                  <LabeledInput label="Trigger label" value={modalDesign.controls.triggerLabel} onChange={(v) => updateModalNested("controls", { triggerLabel: v })} />
+                  <LabeledInput label="Trigger selector" value={modalDesign.controls.triggerSelector} onChange={(v) => updateModalNested("controls", { triggerSelector: v })} />
+                  <LabeledInput label="WalletConnect v2 Project ID" value={modalDesign.provider.walletConnect.projectId} onChange={(v) => updateModalNested("provider", { walletConnect: { ...modalDesign.provider.walletConnect, projectId: v } })} />
+                  <LabeledInput label="Reown AppKit Project ID" value={modalDesign.provider.reownAppKit.projectId} onChange={(v) => updateModalNested("provider", { reownAppKit: { ...modalDesign.provider.reownAppKit, projectId: v } })} />
+                  <LabeledInput label="Provider order (comma-separated)" value={modalDesign.provider.order.join(",")} onChange={(v) => {
+                    const parsed = v.split(",").map((x) => x.trim()).filter(Boolean).filter((x): x is "injected" | "walletconnectV2" | "reownAppKit" => ["injected", "walletconnectV2", "reownAppKit"].includes(x));
+                    if (parsed.length > 0) updateModalNested("provider", { order: parsed });
+                  }} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                  <label><input type="checkbox" checked={modalDesign.features.enableSearch} onChange={(e) => updateModalNested("features", { enableSearch: e.target.checked })} /> search</label>
+                  <label><input type="checkbox" checked={modalDesign.features.enableHelpPanel} onChange={(e) => updateModalNested("features", { enableHelpPanel: e.target.checked })} /> help panel</label>
+                  <label><input type="checkbox" checked={modalDesign.features.showWalletDetails} onChange={(e) => updateModalNested("features", { showWalletDetails: e.target.checked })} /> wallet details</label>
+                  <label><input type="checkbox" checked={modalDesign.features.showBranding} onChange={(e) => updateModalNested("features", { showBranding: e.target.checked })} /> branding</label>
+                  <label><input type="checkbox" checked={modalDesign.features.enableProviderSelection} onChange={(e) => updateModalNested("features", { enableProviderSelection: e.target.checked })} /> provider selection</label>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button className="rounded-lg border border-slate-700 px-3 py-2 text-xs" onClick={() => updateModalDesign(getCanonicalModalDefaults())}>Reset canonical defaults</button>
+                  <button className="rounded-lg border border-indigo-500 bg-indigo-500/20 px-3 py-2 text-xs" onClick={compileForPreview}>Preview exact runtime renderer</button>
+                </div>
+              </Panel>
+            </section>
+          )}
+
           {activeTab === "Compile/Export" && (
             <section className="space-y-4">
               <Panel>
@@ -541,6 +669,7 @@ export default function Home() {
                 </div>
                 <div className="mt-3 text-xs text-slate-300">
                   <div>Output hash: {compileResult?.hash ?? "N/A"}</div>
+                  <div>Modal design hash: {overviewCompile?.modalDesignHash ?? "N/A"}</div>
                   <div>
                     Diagnostics: {compileResult?.diagnostics.length ?? 0} (errors:
                     {compileResult?.diagnostics.filter((d) => d.level === "error").length ?? 0})
@@ -568,6 +697,20 @@ export default function Home() {
               </Panel>
 
               <Panel>
+                <h3 className="text-sm font-medium">Sandboxed runtime preview (exact generated renderer)</h3>
+                {compileResult?.script ? (
+                  <iframe
+                    title="runtime-preview"
+                    className="mt-2 h-[560px] w-full rounded-xl border border-slate-800 bg-slate-950"
+                    sandbox="allow-scripts allow-forms"
+                    srcDoc={runtimePreviewHtml}
+                  />
+                ) : (
+                  <p className="mt-2 text-xs text-slate-400">Compile first to load runtime preview.</p>
+                )}
+              </Panel>
+
+              <Panel>
                 <h3 className="text-sm font-medium">Generated script.js preview</h3>
                 <pre className="mt-2 max-h-[420px] overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-3 text-[11px] leading-5">
                   {compileResult?.script || "Compile to preview generated script.js"}
@@ -585,7 +728,7 @@ function Card({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
       <div className="text-xs uppercase tracking-wide text-slate-400">{title}</div>
-      <div className="mt-2 text-sm text-slate-100">{value}</div>
+      <div className="mt-2 text-sm text-slate-100 break-all">{value}</div>
     </div>
   );
 }

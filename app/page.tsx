@@ -79,7 +79,7 @@ export default function Home() {
     if (!compileResult?.script) return "";
     const escapedScript = compileResult.script.replace(/<\/script/gi, "<\\/script");
     return `<!doctype html><html><head><meta charset=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/></head><body style=\"margin:0;padding:16px;background:#020617;color:#e2e8f0\"><div id=\"app\"></div><div id=\"forge-preview\"></div><script>${escapedScript}</script></body></html>`;
-  }, [compileResult?.script]);
+  }, [compileResult]);
 
   const parseAbiNow = () => {
     setDiagnostics(abi.errors.length ? abi.errors : ["ABI parsed successfully"]);

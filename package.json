@@ -2,6 +2,12 @@
   "name": "the-end-control-plane",
   "version": "0.1.0",
   "private": true,
+  "name": "the-end",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,6 +21,19 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "^4.1.11"
+    "lint": "eslint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.8.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.48.0",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -26,5 +45,11 @@
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5"
+    "@vitest/ui": "^3.2.6",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^3.2.6"
   }
 }

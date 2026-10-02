@@ -10,6 +10,8 @@
   --color-foreground: var(--foreground);
   --font-sans: Inter, "Segoe UI", Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
 }
 
 * {
@@ -21,4 +23,22 @@ body {
   background: radial-gradient(circle at 0 0, #0f172a 0%, #020617 40%, #020617 100%);
   color: var(--foreground);
   font-family: var(--font-sans);
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 35%),
+    radial-gradient(circle at right, rgba(139, 92, 246, 0.16), transparent 28%),
+    linear-gradient(180deg, #020617 0%, #0f172a 44%, #111827 100%);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.35);
 }

@@ -1,3 +1,5 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import type {
   AbiEntry,
   AbiFunctionEntry,
@@ -7,18 +9,18 @@ import type {
   ParsedAbiParameter,
 } from "@/lib/compiler/types";
 
+export function signatureIdentifierSuffix(signature: string) {
+  return bytesToHex(sha256(utf8ToBytes(signature))).slice(0, 32);
+}
+
 function functionId(signature: string) {
   const base = signature
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
-  const checksum = signature
-    .split("")
-    .reduce((sum, character, index) => (sum + character.charCodeAt(0) * (index + 1)) % 1000000007, 0)
-    .toString(36);
 
-  return `${base || "fn"}-${checksum}`;
+  return `${base || "fn"}-${signatureIdentifierSuffix(signature)}`;
 }
 
 function inferStateMutability(entry: AbiFunctionEntry): AbiStateMutability {
@@ -37,14 +39,41 @@ function inferStateMutability(entry: AbiFunctionEntry): AbiStateMutability {
   return "nonpayable";
 }
 
+function splitArraySuffix(type: string) {
+  const arraySuffixMatch = type.match(/(\[[^\]]*\])+$/);
+  const arraySuffix = arraySuffixMatch?.[0] ?? "";
+  const baseType = type.slice(0, type.length - arraySuffix.length);
+
+  return { baseType, arraySuffix };
+}
+
+function canonicalizeElementaryType(type: string) {
+  const { baseType, arraySuffix } = splitArraySuffix(type);
+  const canonicalBaseType =
+    baseType === "uint"
+      ? "uint256"
+      : baseType === "int"
+        ? "int256"
+        : baseType === "byte"
+          ? "bytes1"
+          : baseType === "fixed"
+            ? "fixed128x18"
+            : baseType === "ufixed"
+              ? "ufixed128x18"
+              : baseType;
+
+  return `${canonicalBaseType}${arraySuffix}`;
+}
+
 export function canonicalAbiType(parameter: AbiParameter): string {
-  if (!parameter.type.startsWith("tuple")) {
-    return parameter.type;
+  const { baseType, arraySuffix } = splitArraySuffix(parameter.type);
+
+  if (baseType !== "tuple") {
+    return canonicalizeElementaryType(parameter.type);
   }
 
-  const suffix = parameter.type.slice("tuple".length);
   const componentTypes = (parameter.components ?? []).map(canonicalAbiType).join(",");
-  return `(${componentTypes})${suffix}`;
+  return `(${componentTypes})${arraySuffix}`;
 }
 
 function parseParameter(parameter: AbiParameter, index: number): ParsedAbiParameter {

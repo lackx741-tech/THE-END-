@@ -46,12 +46,16 @@ No private keys or client-side signing libraries are added. The browser runtime 
 
 ## Local setup
 
+Use Node.js 20.9.0 or newer.
+
 ```bash
 npm install
-npm run dev
+THE_END_ENABLE_OPERATOR_DASHBOARD=true npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+The operator dashboard route stays disabled unless `THE_END_ENABLE_OPERATOR_DASHBOARD` is explicitly set, which keeps the control plane behind a deployment-time private boundary by default.
 
 ## Commands
 
